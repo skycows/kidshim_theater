@@ -13,9 +13,6 @@ cd ..
 cd theater
 kubectl apply -f ./kubernetes
 cd ..
-cd notice
-kubectl apply -f ./kubernetes
-cd ..
 cd gateway
 kubectl create deploy gateway --image=kidshim/gateway:v1
 kubectl expose deploy gateway --type="LoadBalancer" --port=8080

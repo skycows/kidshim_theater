@@ -17,10 +17,6 @@ cd theater
 docker build -t kidshim/theater:v1 . 
 docker push kidshim/theater:v1 
 cd ..
-cd notice
-docker build -t kidshim/notice:v1 . 
-docker push kidshim/notice:v1 
-cd ..
 cd gateway
 docker build -t kidshim/gateway:v1 . 
 docker push kidshim/gateway:v1 

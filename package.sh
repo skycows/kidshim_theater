@@ -13,9 +13,6 @@ cd ..
 cd theater
 mvn clean && mvn package
 cd ..
-cd notice
-mvn clean && mvn package
-cd ..
 cd gateway
 mvn clean && mvn package
 cd ..
