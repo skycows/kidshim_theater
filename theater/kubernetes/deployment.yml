@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: theater
-          image: kidsihm/theater:v1
+          image: kidshim/theater:v1
           ports:
             - containerPort: 8080
           readinessProbe:
