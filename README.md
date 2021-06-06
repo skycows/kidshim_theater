@@ -21,7 +21,6 @@
     1. 영화관리, 좌석관리 기능이 수행되지 않더라도 예매는 365일 24시간 받을 수 있어야 한다  Async (event-driven), Eventual Consistency
     1. 결제시스템이 과중되면 사용자를 잠시동안 받지 않고 결제를 잠시후에 하도록 유도한다  Circuit breaker, fallback
 1. 성능
-    1. 고객이 자신의 예매번호를 이용하여 예매내역을 확인할 수 있어야 한다  CQRS
     1. 예매상태가 바뀔때마다 카톡 등으로 알림을 줄 수 있어야 한다  Event driven
 
 ---
@@ -847,6 +846,30 @@ helm install my-kafka --namespace kafka incubator/kafka
 kubectl get all -n kafka
 ```
 
+
+### <span style="color:yellow">kafka UI</span>
+```sh
+helm repo add kafka-ui https://provectus.github.io/kafka-ui
+helm install kafka-ui  --namespace kafka kafka-ui/kafka-ui --set envs.config.KAFKA_CLUSTERS_0_NAME=my-kafka --set envs.config.KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=my-kafka:9092
+```
+```shell
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /home/kinux/.kube/config
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /home/kinux/.kube/config
+NAME: kafka-ui
+LAST DEPLOYED: Mon May 31 22:33:20 2021
+NAMESPACE: kafka
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+1. Get the application URL by running these commands:
+  export POD_NAME=$(kubectl get pods --namespace kafka -l "app.kubernetes.io/name=kafka-ui,app.kubernetes.io/instance=kafka-ui" -o jsonpath="{.items[0].metadata.name}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace kafka port-forward $POD_NAME 8080:80
+  kubectl --namespace kafka port-forward svc/kafka-ui 9090:80
+```
+
+
 ![image](https://user-images.githubusercontent.com/81547613/119323673-ee6ca000-bcb9-11eb-8564-863fe6384430.png)
 
 ### 도커 이미지 만들고 레지스트리에 등록하기
@@ -1583,3 +1606,32 @@ livenessProbe:
 
 ---
 ※ 체크포인트 : https://workflowy.com/s/assessment-check-po/T5YrzcMewfo4J6LW
+
+
+---
+# 신규 서비스 추가(ticketing/customercenter)
+
+## 추가요건
+---
+기능적 요구사항
+1. 발권은 반드시 예약 상태를 확인 후 진행한다.(Sync 호출)
+1. 고객센터에서는 고객의 모든 예약상태를 조회할 수 있어야 한다.(CQRS)
+
+비기능적 요구사항
+1. 신규 서비스의 추가로 인한 기존 서비스의 영향도를 최소화 해야한다.
+
+## 이벤트 스토밍
+![image](https://user-images.githubusercontent.com/80908892/120910751-64aad280-c6bc-11eb-9379-bf44a913dc40.png)
+- customercenter 서비스 추가
+- ticketing 서비스 추가
+
+## 헥사고날 아키텍처 변화
+---
+![image](https://user-images.githubusercontent.com/80908892/120913161-cf193e00-c6cf-11eb-9f38-4cd05fa5d8e0.png)
+
+## 구현
+---
+- 운영중은 kafka의 이벤트 구독으로 기존 서비스의 변화는 없다.
+- 기존 서비스가 신규 서비스를 호출하지 않으므로  추가기능을 개발할 필요가 없다.
+
+
