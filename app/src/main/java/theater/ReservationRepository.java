@@ -9,5 +9,5 @@ import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 public interface ReservationRepository extends PagingAndSortingRepository<Reservation, Long>{
     public Optional<Reservation> findByBookId(String bookId);
     public void deleteByBookId(String bookId);
-    public Reservation save(Reservation reservation);
+    //public Reservation save(Reservation reservation);
 }

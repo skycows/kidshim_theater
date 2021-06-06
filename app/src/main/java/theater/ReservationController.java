@@ -1,18 +1,26 @@
 package theater;
 
+import java.util.Optional;
+
+import javax.transaction.Transactional;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.extern.slf4j.Slf4j;
 import theater.exception.ApprovalBadRequestException;
 import theater.exception.ReservationNotFoundException;
 import theater.external.Approval;
 import theater.external.ApprovalService;
-
-import javax.transaction.Transactional;
-import java.util.Optional;
 
 @RestController
 @Slf4j
@@ -31,7 +39,7 @@ public class ReservationController {
     }
 
     @PostMapping("/reservations/new")
-    public ResponseEntity createReservation(@RequestBody Book book) throws JsonProcessingException {
+    public ResponseEntity<?> createReservation(@RequestBody Book book) throws JsonProcessingException {
         log.info("Make Reservation");
 
         Reserved reserved = new Reserved();
@@ -71,7 +79,7 @@ public class ReservationController {
 
     @DeleteMapping("/reservations/{bookId}")
     @Transactional
-    public ResponseEntity cancelReservation(@PathVariable("bookId")String bookId) throws JsonProcessingException {
+    public ResponseEntity<?> cancelReservation(@PathVariable("bookId")String bookId) throws JsonProcessingException {
         Optional<Reservation> optional = reservationRepository.findByBookId(bookId);
 
         if(optional.isPresent()){
