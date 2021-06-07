@@ -23,9 +23,17 @@ spring:
           predicates:
             - Path=/movieSeats/**, /movies/**, /reservationavailabilityinquiries/**
         - id: notice
-          uri: http://localhost:8086
+          uri: http://localhost:8085
           predicates:
             - Path=
+        - id: customercenter
+          uri: http://localhost:8086
+          predicates:
+            - Path=/bookInfos/** /mypages/**
+        - id: ticketing
+          uri: http://localhost:8087
+          predicates:
+            - Path=/tickets/** /printTickets/**
       globalcors:
         corsConfigurations:
           "[/**]":
@@ -62,6 +70,14 @@ spring:
           uri: http://notice:8080
           predicates:
             - Path=
+        - id: customercenter
+          uri: http://customercenter:8080
+          predicates:
+            - Path=/bookInfos/** /mypages/**
+        - id: ticketing
+          uri: http://ticketing:8080
+          predicates:
+            - Path=/tickets/** /printTickets/**
       globalcors:
         corsConfigurations:
           "[/**]":

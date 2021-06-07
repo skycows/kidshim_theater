@@ -24,19 +24,18 @@ spring:
                   serde: org.apache.kafka.common.serialization.Serdes$StringSerde
       bindings:
         event-in:
-          group: notice
+          group: customercenter
           destination: theater
           contentType: application/json
         event-out:
           destination: theater
           contentType: application/json
-
-logging:
-  level:
-    org.hibernate.type: trace
-    org.springframework.cloud: debug
+# logging:
+#   level:
+#     org.hibernate.type: trace
+#     org.springframework.cloud: debug
 server:
-  port: 8085
+  port: 8086
 ---
 
 spring:
@@ -56,7 +55,7 @@ spring:
                   serde: org.apache.kafka.common.serialization.Serdes$StringSerde
       bindings:
         event-in:
-          group: notice
+          group: customercenter
           destination: theater
           contentType: application/json
         event-out:

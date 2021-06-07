@@ -16,3 +16,9 @@ cd ..
 cd gateway
 mvn clean && mvn package
 cd ..
+cd customercenter
+mvn clean && mvn package
+cd ..
+cd ticketing
+mvn clean && mvn package
+cd ..

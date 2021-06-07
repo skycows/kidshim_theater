@@ -6,10 +6,12 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.PostLoad;
+import javax.persistence.PostPersist;
 import javax.persistence.Table;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,6 +53,13 @@ public class Reservation {
     public void onPostLoad() {
         Logger logger = LoggerFactory.getLogger("Reservation");
         logger.info("Load");
+    }
+
+    @PostPersist
+    public void onPostPersist(){
+        Reserved reserved = new Reserved();
+        BeanUtils.copyProperties(this, reserved);
+        reserved.publishAfterCommit();
     }
 
 //    @PrePersist
