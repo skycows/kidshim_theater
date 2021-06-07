@@ -31,10 +31,29 @@ spring:
           destination: theater
           contentType: application/json
 
-logging:
-  level:
-    org.hibernate.type: trace
-    org.springframework.cloud: debug
+feign:
+  customercenter-api:
+    url: http://localhost:8086
+  httpclient:
+    connection-timeout: 1
+  hystrix:
+    enabled: true
+  client:
+    config:
+      default:
+        loggerLevel: BASIC
+#        connectTimeout: 5000
+#        readTimeout: 5000
+hystrix:
+  command:
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 610
+
+# logging:
+#   level:
+#     org.hibernate.type: trace
+#     org.springframework.cloud: debug
 server:
   port: 8087
 ---
@@ -62,3 +81,15 @@ spring:
         event-out:
           destination: theater
           contentType: application/json
+
+feign:
+  customercenter-api:
+    url: http://customercenter:8080
+  httpclient:
+    connection-timeout: 1
+  hystrix:
+    enabled: true
+  client:
+    config:
+      default:
+        loggerLevel: FULL

@@ -1,15 +1,21 @@
 package theatermy;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.util.List;
 
- @RestController
- public class TicketController {
+import theatermy.external.BookInfoService;
 
- }
+@RestController
+public class TicketController {
+  private BookInfoService bookInfoService;
+
+  public TicketController(BookInfoService bookInfoService) {
+    this.bookInfoService = bookInfoService;
+  }
+
+  @GetMapping("/print/{bookId}")
+  public String print(@PathVariable String bookId) {
+    return bookInfoService.searchBook(bookId);
+  }
+}
