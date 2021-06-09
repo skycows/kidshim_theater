@@ -15,6 +15,11 @@ public class BookInfoServiceFallbackFactory implements FallbackFactory<BookInfoS
       public String searchBook(String bookId) {
         return "Fallback - ticketing";
       }
+
+      @Override
+      public String isolation() {
+          return "fallback - isolation";
+      }
     };
   }
 }

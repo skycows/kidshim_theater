@@ -1622,7 +1622,6 @@ livenessProbe:
 
 ## 이벤트 스토밍
 ![image](https://user-images.githubusercontent.com/80908892/120929379-c94d4800-c723-11eb-8b31-22a9984ed905.png)
-![image](https://user-images.githubusercontent.com/80908892/120910751-64aad280-c6bc-11eb-9379-bf44a913dc40.png)
 - customercenter 서비스 추가
 - ticketing 서비스 추가
 

@@ -55,12 +55,12 @@ public class Reservation {
         logger.info("Load");
     }
 
-    @PostPersist
-    public void onPostPersist(){
-        Reserved reserved = new Reserved();
-        BeanUtils.copyProperties(this, reserved);
-        reserved.publishAfterCommit();
-    }
+    // @PostPersist
+    // public void onPostPersist(){
+    //     Reserved reserved = new Reserved();
+    //     BeanUtils.copyProperties(this, reserved);
+    //     reserved.publishAfterCommit();
+    // }
 
 //    @PrePersist
 //    public void onPrePersist() throws JsonProcessingException {

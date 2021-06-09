@@ -19,6 +19,8 @@ output = json
 
 --------------------------------------------------------------------------------------------
 [클러스터 생성]
+eksctl create cluster --name user10-eks --version 1.17 --nodegroup-name standard-workers --node-type t3.medium --nodes 3 --nodes-min 1 --nodes-max 3
+
 root@labs-1227910482:/home/project/team# eksctl create cluster --name user02-eks --version 1.17 --nodegroup-name standard-workers --node-type t3.medium --nodes 4 --nodes-min 1 --nodes-max 4
 2021-05-24 04:42:31 [ℹ]  eksctl version 0.48.0
 2021-05-24 04:42:31 [ℹ]  using region ap-northeast-2

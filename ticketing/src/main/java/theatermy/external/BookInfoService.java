@@ -14,4 +14,7 @@ public interface BookInfoService {
 
   @GetMapping("/bookInfo")
   public String searchBook(@RequestParam("bookId") String bookId);
+
+  @GetMapping("/isolation")
+  String isolation();
 }

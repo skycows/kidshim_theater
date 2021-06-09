@@ -1,5 +1,24 @@
 server:
   port: 8080
+
+management:
+  health:
+    status:
+      order: DOWN, MAINTENANCE, UNKOWN, UP
+      http-mapping:
+        DOWN: 503
+        MAINTENANCE: 503
+        UNKNOWN: 200
+        UP: 200
+  endpoints:
+      web:
+          exposure:
+              include: "*"
+spring:
+  mvc:
+    hiddenmethod:
+      filter:
+        enabled: true
 ---
 
 spring:

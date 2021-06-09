@@ -29,11 +29,11 @@ spring:
         - id: customercenter
           uri: http://localhost:8086
           predicates:
-            - Path=/bookInfos/** /mypages/**
+            - Path=/bookInfos/**, /mypages/**
         - id: ticketing
           uri: http://localhost:8087
           predicates:
-            - Path=/tickets/** /printTickets/**
+            - Path=/tickets/**, /printTickets/**
       globalcors:
         corsConfigurations:
           "[/**]":
@@ -73,11 +73,11 @@ spring:
         - id: customercenter
           uri: http://customercenter:8080
           predicates:
-            - Path=/bookInfos/** /mypages/**
+            - Path=/bookInfos/**, /mypages/**
         - id: ticketing
           uri: http://ticketing:8080
           predicates:
-            - Path=/tickets/** /printTickets/**
+            - Path=/tickets/**, /printTickets/**
       globalcors:
         corsConfigurations:
           "[/**]":

@@ -4,6 +4,7 @@ from kafka import KafkaConsumer
 consumer = KafkaConsumer('theater',
                          group_id='my-kakao',
                          bootstrap_servers=['my-kafka.kafka.svc.cluster.local:9092'])
+print ("kakao message reciver!!")
 for message in consumer:
     # message value and key are raw bytes -- decode if necessary!
     # e.g., for unicode: `message.value.decode('utf-8')`

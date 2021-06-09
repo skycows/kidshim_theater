@@ -68,6 +68,9 @@ public class ReservationController {
             log.info("======= Pay Success. " + approvalMessage);
             log.info("======= Pay Success. " + reservedMessage);
 
+            //Send Event
+            reserved.publish();            
+
             return ResponseEntity.ok(reservation);
         } else {
 
