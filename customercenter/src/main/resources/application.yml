@@ -8,16 +8,16 @@ call:
 spring:
   profiles: default
   datasource:
-    name: mantis
+    name: theater
     initialization-mode: always      
-    password: chzh1130
+    password: password
     tomcat:
       max-active: 50
       max-idle: 20
       max-wait: 20000
       min-idle: 15
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://confidy.cafe24.com:3306/mantis?characterEncoding=UTF-8&serverTimezone=UTC
+    url: jdbc:mariadb://mariadb.abcd.com:3306/theater?characterEncoding=UTF-8&serverTimezone=UTC
     username: neoshim
   jpa:
     open-in-view: false
@@ -57,16 +57,16 @@ server:
 spring:
   profiles: docker
   datasource:
-    name: mantis
+    name: theater
     initialization-mode: always      
-    password: chzh1130
+    password: password
     tomcat:
       max-active: 50
       max-idle: 20
       max-wait: 20000
       min-idle: 15
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://confidy.cafe24.com:3306/mantis?characterEncoding=UTF-8&serverTimezone=UTC
+    url: jdbc:mariadb://mariadb.abcd.com:3306/theater?characterEncoding=UTF-8&serverTimezone=UTC
     username: neoshim
   jpa:
     open-in-view: false
