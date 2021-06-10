@@ -2,7 +2,7 @@
 ## 계정접속
 ```bash
 kinux@gram-kidshim:~/study/aws$ aws configure
-AWS Access Key ID [****************LROQ]: AKIA4ZVUN62G2LS63PFC
+AWS Access Key ID [****************LROQ]: ~~~~~~~~~~~~~~~~~~~~
 AWS Secret Access Key [****************EZgQ]: ~~~~~~~~~~~~~~~~~~~~
 Default region name [ap-northeast-2]: ap-southeast-2
 Default output format [json]: json
@@ -11,7 +11,7 @@ Default output format [json]: json
 ```bash
 kinux@gram-kidshim:~/study/aws$ cat ~/.aws/credentials
 [default]
-aws_access_key_id = AKIA4ZVUN62G2LS63PFC
+aws_access_key_id = ~~~~~~~~~~~~~~~~~~~~
 aws_secret_access_key = ~~~~~~~~~~~~~~~~~~
 
 kinux@gram-kidshim:~/study/aws$ cat ~/.aws/config
