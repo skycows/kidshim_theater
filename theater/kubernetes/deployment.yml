@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: theater
-          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-theater:v1
+          image: kidshim/theater:v1
           ports:
             - containerPort: 8080
           readinessProbe:

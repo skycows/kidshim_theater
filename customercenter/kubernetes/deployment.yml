@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: customercenter
-          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-customercenter:v4
+          image: kidshim/customercenter:v4
           ports:
             - containerPort: 8080
           readinessProbe:

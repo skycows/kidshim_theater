@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: pay
-          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-pay:v1
+          image: kidshim/pay:v1
           ports:
             - containerPort: 8080
           readinessProbe:

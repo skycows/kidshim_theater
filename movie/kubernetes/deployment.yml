@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: movie
-          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-movie:v1
+          image: kidshim/movie:v1
           ports:
             - containerPort: 8080
           readinessProbe:
