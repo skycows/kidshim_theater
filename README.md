@@ -1,9 +1,52 @@
-# 2조 과제 : 영화예매 시스템
-![image](https://user-images.githubusercontent.com/80744278/119227825-d0ccf880-bb4a-11eb-9f53-99faf04a0f35.png)
+# AWS 설정
+## 계정접속
+```bash
+kinux@gram-kidshim:~/study/aws$ aws configure
+AWS Access Key ID [****************LROQ]: AKIA4ZVUN62G2LS63PFC
+AWS Secret Access Key [****************EZgQ]: ~~~~~~~~~~~~~~~~~~~~
+Default region name [ap-northeast-2]: ap-southeast-2
+Default output format [json]: json
+```
+## 계정확인
+```bash
+kinux@gram-kidshim:~/study/aws$ cat ~/.aws/credentials
+[default]
+aws_access_key_id = AKIA4ZVUN62G2LS63PFC
+aws_secret_access_key = ~~~~~~~~~~~~~~~~~~
 
+kinux@gram-kidshim:~/study/aws$ cat ~/.aws/config
+[default]
+region = ap-southeast-2
+output = json
+kinux@gram-kidshim:~/study/aws$
+```
+
+## cluster 생성
+```bash
+kinux@gram-kidshim:~/study/aws$ eksctl create cluster --name user10-eks --version 1.17 --nodegroup-name standard-workers --node-type t3.medium --nodes 4 --nodes-min 1 --nodes-max 4
+kinux@gram-kidshim:~/study/aws$ aws eks --region ap-southeast-2 update-kubeconfig --name user10-eks
+kinux@gram-kidshim:~/study/aws$ kubectl config current-context
+arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks
+```
+## 노드 확인
+```bash
+kinux@gram-kidshim:~/study/aws$ kubectl get nodes
+NAME                                                STATUS   ROLES    AGE    VERSION
+ip-192-168-4-168.ap-southeast-2.compute.internal    Ready    <none>   3m8s   v1.17.12-eks-7684af
+ip-192-168-57-49.ap-southeast-2.compute.internal    Ready    <none>   3m6s   v1.17.12-eks-7684af
+ip-192-168-67-155.ap-southeast-2.compute.internal   Ready    <none>   3m8s   v1.17.12-eks-7684af
+ip-192-168-7-159.ap-southeast-2.compute.internal    Ready    <none>   3m3s   v1.17.12-eks-7684af
+```
+## cluster 확인
+```bash
+kinux@gram-kidshim:~/study/aws$ kubectl config current-context
+arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks
+```
+
+# 이벤트스토밍
 ---
-# 서비스 시나리오
-
+## 팀과제 결과
+---
 기능적 요구사항
 1. 고객이 영화를 선택하여 예매한다.
 1. 고객이 결제한다.
@@ -16,925 +59,533 @@
 
 비기능적 요구사항
 1. 트랜잭션
-    1. 결제가 되지 않으면 예매를 할 수 없다.(Sync호출)
+    1. 결제가 되지 않으면 예매를 할 수 없다.
 1. 장애격리
-    1. 영화관리, 좌석관리 기능이 수행되지 않더라도 예매는 365일 24시간 받을 수 있어야 한다  Async (event-driven), Eventual Consistency
-    1. 결제시스템이 과중되면 사용자를 잠시동안 받지 않고 결제를 잠시후에 하도록 유도한다  Circuit breaker, fallback
-1. 성능
-    1. 예매상태가 바뀔때마다 카톡 등으로 알림을 줄 수 있어야 한다  Event driven
+    1. 영화관리, 좌석관리 기능이 수행되지 않더라도 예매는 365일 24시간 받을 수 있어야 한다.
+    1. 결제시스템이 과중되면 사용자를 잠시동안 받지 않고 결제를 잠시후에 하도록 유도한다.
+1. 기타
+    1. 예매상태가 바뀔때마다 카톡 등으로 알림을 줄 수 있어야 한다.
+    <img src="https://user-images.githubusercontent.com/81547613/119284217-1fc57b80-bc7a-11eb-8ad5-59d8efba8487.png" width="1500">
 
+## 개인과제 결과
 ---
-# 체크포인트
+### 추가요건
+- 기능적 요구사항
+  1. 발권은 반드시 예약 상태를 확인 후 진행한다.
+  1. 고객센터에서는 고객의 모든 예약상태를 조회할 수 있어야 한다.
+  <img src="https://user-images.githubusercontent.com/80908892/120929379-c94d4800-c723-11eb-8b31-22a9984ed905.png" width="1500">
+  - customercenter 서비스 추가
+  - ticketing 서비스 추가
 
-1. Saga
-1. CQRS
-1. Correlation
-1. Req/Resp
-1. Gateway
-1. Deploy/ Pipeline
-1. Circuit Breaker
-1. Autoscale (HPA)
-1. Zero-downtime deploy (Readiness Probe)
-1. Config Map/ Persistence Volume
-1. Polyglot
-1. Self-healing (Liveness Probe)
-
+# 구현 및 테스트
+## Kubernetes환경 구성
 ---
-# 분석/설계
+### namespace 설정 
+```bash
+kinux@gram-kidshim:~/study/aws$ kubectl create ns kafka
+namespace/kafka created
+kinux@gram-kidshim:~/study/aws$ kubectl create ns user10-ns
+namespace/user10-ns created
+kinux@gram-kidshim:~/study/aws$ kubectl get ns
+NAME              STATUS   AGE
+default           Active   13m
+kafka             Active   61s
+kube-node-lease   Active   13m
+kube-public       Active   13m
+kube-system       Active   13m
+user10-ns         Active   18s
+kinux@gram-kidshim:~/study/aws$ kubectl config set-context $(kubectl config current-context) --namespace=user10-ns
+Context "arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks" modified.
+kinux@gram-kidshim:~/study/aws$ kubectl config get-contexts
+CURRENT   NAME                                                         CLUSTER                                                      AUTHINFO                                                     NAMESPACE
+*         arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks   arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks   arn:aws:eks:ap-southeast-2:879772956301:cluster/user10-eks   user10-ns
+          user10@user10-eks.ap-southeast-2.eksctl.io                   user10-eks.ap-southeast-2.eksctl.io                          user10@user10-eks.ap-southeast-2.eksctl.io
+```
+### kafka설치
+```bash
+kinux@gram-kidshim:~/study/aws$ curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 > get_helm.sh
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 11248  100 11248    0     0  59829      0 --:--:-- --:--:-- --:--:-- 59829
+kinux@gram-kidshim:~/study/aws$ chmod 700 get_helm.sh
+kinux@gram-kidshim:~/study/aws$ ./get_helm.sh
+kinux@gram-kidshim:~/study/aws$ helm repo add incubator https://charts.helm.sh/incubator
+kinux@gram-kidshim:~/study/aws$ helm install my-kafka --namespace kafka incubator/kafka
+kinux@gram-kidshim:~/study/aws$ kubectl get all -n kafka
+NAME                       READY   STATUS    RESTARTS   AGE
+pod/my-kafka-0             1/1     Running   1          5m30s
+pod/my-kafka-1             1/1     Running   0          3m23s
+pod/my-kafka-2             1/1     Running   0          2m16s
+pod/my-kafka-zookeeper-0   1/1     Running   0          5m30s
+pod/my-kafka-zookeeper-1   1/1     Running   0          4m51s
+pod/my-kafka-zookeeper-2   1/1     Running   0          4m
 
-## Event Storming 결과
-* MSAEz 로 모델링한 이벤트스토밍 결과: http://www.msaez.io/#/storming/NsV4iwCaeqQOsNMyMgsTQ9Vaxgw2/share/c17526752f14346221c225bf4462d0df
+NAME                                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+service/my-kafka                      ClusterIP   10.100.234.27    <none>        9092/TCP                     5m32s
+service/my-kafka-headless             ClusterIP   None             <none>        9092/TCP                     5m32s
+service/my-kafka-zookeeper            ClusterIP   10.100.211.135   <none>        2181/TCP                     5m32s
+service/my-kafka-zookeeper-headless   ClusterIP   None             <none>        2181/TCP,3888/TCP,2888/TCP   5m32s
 
-### 이벤트 도출
-![image](https://user-images.githubusercontent.com/80744278/119439561-98513880-bd5d-11eb-82b4-e90e886525a2.png)
+NAME                                  READY   AGE
+statefulset.apps/my-kafka             3/3     5m33s
+statefulset.apps/my-kafka-zookeeper   3/3     5m33s
+```
 
-### 부적격 이벤트 탈락
-![image](https://user-images.githubusercontent.com/80744278/119439606-b028bc80-bd5d-11eb-8504-b76ca2b125e6.png)
-- movie서비스에서 deleteMovie 기능 제거 (현재 사용 이벤트 없음)
-
-### 액터, 커맨드 부착하여 읽기 좋게
-![image](https://user-images.githubusercontent.com/80744278/119443846-3c8aad80-bd65-11eb-820e-4facedbd1f0f.png)
-
-### 어그리게잇으로 묶기
-![image](https://user-images.githubusercontent.com/80744278/119444710-a48dc380-bd66-11eb-85d1-c72493cded18.png)
-
-### 바운디드 컨텍스트로 묶기
-![image](https://user-images.githubusercontent.com/80744278/119444790-c38c5580-bd66-11eb-864e-d3e57cb8350d.png)
-
-### 폴리시의 이동과 컨텍스트 매핑 (점선은 Pub/Sub, 실선은 Req/Resp)
-![image](https://user-images.githubusercontent.com/80908892/118935502-94509f80-b986-11eb-820d-7ad60bf637a0.png)
-
-### 완성본에 대한 기능적/비기능적 요구사항을 커버하는지 검증
-- app서비스에서 pay서비스로가는 cancel(pub/sub) 중복 표현 제거(3개 -> 1개)
-![image](https://user-images.githubusercontent.com/80908892/118985614-8e27e680-b9b9-11eb-9b81-fe8d1196887e.png)
-
-- movie서비스에서 cutomer조회 기능 제거
-- MovieSeat 어그리게이션에서 불필요 항목 제거 (movieId, payId)
-- MovieSeat, Movie 어그리게이션에 예매번호(bookId) 및 상영관번호(screenId) 컬럼 추가
-- Approved 클래스에 필요 항목 추가 (bookId, movieId)
-- User의 View 채널은 App으로 통일
-- 기타 정비 및 현행화
-![image](https://user-images.githubusercontent.com/81547613/119284217-1fc57b80-bc7a-11eb-8ad5-59d8efba8487.png)
-
----
-# 구현:
-
-* 분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다
-
-```maven
+### docker login
+```bash
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/app$ docker login --username AWS -p $(aws ecr get-login-password --region ap-southeast-2)  879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+Login Succeeded
+```
+### docker build and push
+```bash
+mvn clean && mvn package
+docker build -t 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-app:v1 .
+aws ecr create-repository --repository-name user10-app --region ap-southeast-2
+docker push 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-app:v1
+kubectl apply -f ./kubernetes
+```
+### k8s deploy
+```bash
 cd app
-mvn spring-boot:run
-
+kubectl apply -f ./kubernetes
+cd ..
 cd pay
-mvn spring-boot:run 
-
+kubectl apply -f ./kubernetes
+cd ..
 cd movie
-mvn spring-boot:run  
-
+kubectl apply -f ./kubernetes
+cd ..
 cd theater
-mvn spring-boot:run
+kubectl apply -f ./kubernetes
+cd ..
+cd customercenter
+kubectl apply -f ./kubernetes
+cd ..
+cd ticketing
+kubectl apply -f ./kubernetes
+cd ..
+cd gateway
+kubectl create deploy gateway --image=879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-gateway:v1
+kubectl expose deploy gateway --type="LoadBalancer" --port=8080
+cd ..
+kubectl create deploy kakao --image=879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-kakao:v1
+kubectl expose deploy kakao --type="ClusterIP" --port=8080
+cd ..
+kubectl run siege --image=apexacme/siege-nginx
+```
+```shell
+Every 2.0s: kubectl get all                                                                                                                                                                                               gram-kidshim: Wed Jun  9 13:49:39 2021
+NAME                                  READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4               1/1     Running   0          9m42s
+pod/customercenter-7b89f74f46-srx52   1/1     Running   0          9m31s
+pod/gateway-6d664c5d6f-nmg58          1/1     Running   0          4m56s
+pod/kakao-794487c556-z5vzt            1/1     Running   0          4m31s
+pod/movie-ccbbc5bb9-42r9k             1/1     Running   0          9m36s
+pod/pay-56967ccf97-lllb4              1/1     Running   0          9m39s
+pod/siege                             1/1     Running   0          2m16s
+pod/theater-59b665f8d4-wpr75          1/1     Running   0          9m34s
+pod/ticketing-565fb6b5bc-2zw4n        1/1     Running   0          9m28s
 
-cd notice
-mvn spring-boot:run
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         104m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         26m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   25m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         18m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         22m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         22m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         20m
+service/ticketing        ClusterIP      10.100.66.201    <none>                                                                        8080/TCP         20m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           9m44s
+deployment.apps/customercenter   1/1     1            1           9m33s
+deployment.apps/gateway          1/1     1            1           4m58s
+deployment.apps/kakao            1/1     1            1           4m33s
+deployment.apps/movie            1/1     1            1           9m38s
+deployment.apps/pay              1/1     1            1           9m41s
+deployment.apps/theater          1/1     1            1           9m36s
+deployment.apps/ticketing        1/1     1            1           9m30s
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       9m45s
+replicaset.apps/customercenter-7b89f74f46   1         1         1       9m34s
+replicaset.apps/gateway-6d664c5d6f          1         1         1       4m59s
+replicaset.apps/kakao-794487c556            1         1         1       4m34s
+replicaset.apps/movie-ccbbc5bb9             1         1         1       9m39s
+replicaset.apps/pay-56967ccf97              1         1         1       9m42s
+replicaset.apps/theater-59b665f8d4          1         1         1       9m37s
+replicaset.apps/ticketing-565fb6b5bc        1         1         1       9m31s
 ```
 
+### k8s deploy 점검 및 gateway테스트
+```shell
+#!/usr/bin/env bash
+#
+
+echo "reservations: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/reservations | jq .page.totalElements)"
+echo "approvals: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/approvals | jq .page.totalElements)"
+echo "movieManagements: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieManagements | jq .page.totalElements)"
+echo "movieSeats: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieSeats | jq .page.totalElements)"
+echo "movies: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movies | jq .page.totalElements)"
+echo "bookInfos: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/bookInfos | jq .page.totalElements)"
+echo "tickets: $(http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/tickets | jq .page.totalElements)"
+```
+```console
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ ./k8s-test-count-script.sh
+reservations: 0
+approvals: 0
+movieManagements: 0
+movieSeats: 0
+movies: 0
+bookInfos: 0
+tickets: 0
+```
 ---
-## DDD 의 적용
-* 총 5개의 Domain 으로 관리되고 있으며, 예약관리(Reservation) , 결제관리(Approval), 상영영화관리(MovieManagement), 영화좌석관리(MovieSeat), 영화관리(Movie)으로 구성하였습니다. 
+## 동작 테스트
+---
+### 영화등록
+```bash
+http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieManagements movieId="MOVIE-00001" title="어벤져스" status="RUNNING"
+http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieManagements movieId="MOVIE-00002" title="아이언맨" status="RUNNING"
+http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieManagements movieId="MOVIE-00003" title="토르" status="WAITING"
+```
 
-```java
-package theater;
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ ./k8s-test-count-script.sh
+reservations: 0
+approvals: 0
+movieManagements: 3
+movieSeats: 0
+movies: 3
+bookInfos: 0
+tickets: 0
+```
 
-@Entity
-@Table(name = "Reservation_table")
-@Setter
-@Getter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class Reservation {
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movieManagements
+HTTP/1.1 200 OK
+Content-Type: application/hal+json;charset=UTF-8
+Date: Wed, 09 Jun 2021 05:15:54 GMT
+transfer-encoding: chunked
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
-    private String bookId;
-    private String customerId;
-    private String movieId;
-    private String payId;
-    private String bookedYn;
-
-    @PostLoad
-    public void onPostLoad() {
-        Logger logger = LoggerFactory.getLogger("Reservation");
-        logger.info("Load");
-    }
-
-    @PrePersist
-    public void onPrePersist() throws JsonProcessingException {
-        Logger logger = LoggerFactory.getLogger("Reservation");
-        logger.info("Make Reservation");
-
-        Reserved reserved = new Reserved();
-        BeanUtils.copyProperties(this, reserved);
-
-        Approval approvalFromPay = AppApplication.applicationContext.getBean(theater.external.ApprovalService.class)
-                .paymentRequest(this.bookId);
-
-        if (approvalFromPay != null) {
-            this.setPayId(approvalFromPay.getPayId());
-            ObjectMapper objectMapper = new ObjectMapper();
-            String approvalMessage = objectMapper.writeValueAsString(approvalFromPay);
-        } else {
-            logger.info("=======Pay didn't Approve. Confirm Pay Service.=======");
+{
+    "_embedded": {
+        "movieManagements": [
+            {
+                "_links": {
+                    "movieManagement": {
+                        "href": "http://movie:8080/movieManagements/1"
+                    },
+                    "self": {
+                        "href": "http://movie:8080/movieManagements/1"
+                    }
+                },
+                "movieId": "MOVIE-00001",
+                "status": "RUNNING",
+                "title": "어벤져스"
+            },
+            {
+                "_links": {
+                    "movieManagement": {
+                        "href": "http://movie:8080/movieManagements/2"
+                    },
+                    "self": {
+                        "href": "http://movie:8080/movieManagements/2"
+                    }
+                },
+                "movieId": "MOVIE-00002",
+                "status": "RUNNING",
+                "title": "아이언맨"
+            },
+            {
+                "_links": {
+                    "movieManagement": {
+                        "href": "http://movie:8080/movieManagements/3"
+                    },
+                    "self": {
+                        "href": "http://movie:8080/movieManagements/3"
+                    }
+                },
+                "movieId": "MOVIE-00003",
+                "status": "WAITING",
+                "title": "토르"
+            }
+        ]
+    },
+    "_links": {
+        "profile": {
+            "href": "http://movie:8080/profile/movieManagements"
+        },
+        "self": {
+            "href": "http://movie:8080/movieManagements{?page,size,sort}",
+            "templated": true
         }
-    }
-
-    @PreRemove
-    public void onPostRemove() throws JsonProcessingException {
-        Logger logger = LoggerFactory.getLogger("Reservation");
-        logger.info("Make Canceled");
-
-        Canceled canceled = new Canceled();
-        BeanUtils.copyProperties(this, canceled);
-
-        ObjectMapper objectMapper = new ObjectMapper();
-        String canceledMessage = objectMapper.writeValueAsString(canceled);
-        logger.info(canceledMessage);
-
-        canceled.publishAfterCommit();
-
+    },
+    "page": {
+        "number": 0,
+        "size": 20,
+        "totalElements": 3,
+        "totalPages": 1
     }
 }
 ```
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/movies
+HTTP/1.1 200 OK
+Content-Type: application/hal+json;charset=UTF-8
+Date: Wed, 09 Jun 2021 05:22:25 GMT
+transfer-encoding: chunked
 
-* Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
-
-
-```java
-package theater;
-
-import org.springframework.data.repository.PagingAndSortingRepository;
-import org.springframework.data.rest.core.annotation.RepositoryRestResource;
-
-@RepositoryRestResource(collectionResourceRel="reservations", path="reservations")
-public interface ReservationRepository extends PagingAndSortingRepository<Reservation, Long>{
-
+{
+    "_embedded": {
+        "movies": [
+            {
+                "_links": {
+                    "movie": {
+                        "href": "http://theater:8080/movies/1"
+                    },
+                    "self": {
+                        "href": "http://theater:8080/movies/1"
+                    }
+                },
+                "movieId": "MOVIE-00001",
+                "screenId": "어벤져스_상영관"
+            },
+            {
+                "_links": {
+                    "movie": {
+                        "href": "http://theater:8080/movies/2"
+                    },
+                    "self": {
+                        "href": "http://theater:8080/movies/2"
+                    }
+                },
+                "movieId": "MOVIE-00002",
+                "screenId": "아이언맨_상영관"
+            },
+            {
+                "_links": {
+                    "movie": {
+                        "href": "http://theater:8080/movies/3"
+                    },
+                    "self": {
+                        "href": "http://theater:8080/movies/3"
+                    }
+                },
+                "movieId": "MOVIE-00003",
+                "screenId": "토르_상영관"
+            }
+        ]
+    },
+    "_links": {
+        "profile": {
+            "href": "http://theater:8080/profile/movies"
+        },
+        "search": {
+            "href": "http://theater:8080/movies/search"
+        },
+        "self": {
+            "href": "http://theater:8080/movies{?page,size,sort}",
+            "templated": true
+        }
+    },
+    "page": {
+        "number": 0,
+        "size": 20,
+        "totalElements": 3,
+        "totalPages": 1
+    }
 }
 ```
-
 ---
-## 마이크로 서비스 호출 흐름
-
-
-### 영화 등록 처리 : 관리자가 영화를 등록 합니다.
-
-* MOVIE 등록
-```
-http POST http://localhost:8083/movieManagements movieId="MOVIE-00001" title="어벤져스" status="RUNNING"
-http POST http://localhost:8083/movieManagements movieId="MOVIE-00002" title="아이언맨" status="RUNNING"
-http POST http://localhost:8083/movieManagements movieId="MOVIE-00003" title="토르" status="WAITING"
-```
-
-* Movie 서비스 내 MOVIE_MANAGEMENTS (영화관리) 테이블 데이터 생성 완료
-
-```json
-"movieManagements": [
-    {
-        "_links": {
-            "movieManagement": {
-                "href": "http://localhost:8083/movieManagements/1"
-            },
-            "self": {
-                "href": "http://localhost:8083/movieManagements/1"
-            }
-        },
-        "movieId": "MOVIE-00001",
-        "status": "RUNNING",
-        "title": "어벤져스"
-    },
-    {
-        "_links": {
-            "movieManagement": {
-                "href": "http://localhost:8083/movieManagements/2"
-            },
-            "self": {
-                "href": "http://localhost:8083/movieManagements/2"
-            }
-        },
-        "movieId": "MOVIE-00002",
-        "status": "RUNNING",
-        "title": "아이언맨"
-    },
-    {
-        "_links": {
-            "movieManagement": {
-                "href": "http://localhost:8083/movieManagements/3"
-            },
-            "self": {
-                "href": "http://localhost:8083/movieManagements/3"
-            }
-        },
-        "movieId": "MOVIE-00003",
-        "status": "WAITING",
-        "title": "토르"
-    }
-]
-```
-
-* Theater 서비스 내 MOVIES (좌석배정) 테이블 데이터 생성 완료
-
-```json
-"movies": [
-    {
-        "_links": {
-            "movie": {
-                "href": "http://localhost:8084/movies/1"
-            },
-            "self": {
-                "href": "http://localhost:8084/movies/1"
-            }
-        },
-        "movieId": "MOVIE-00001",
-        "screenId": "어벤져스_상영관"
-    },
-    {
-        "_links": {
-            "movie": {
-                "href": "http://localhost:8084/movies/2"
-            },
-            "self": {
-                "href": "http://localhost:8084/movies/2"
-            }
-        },
-        "movieId": "MOVIE-00002",
-        "screenId": "아이언맨_상영관"
-    },
-    {
-        "_links": {
-            "movie": {
-                "href": "http://localhost:8084/movies/3"
-            },
-            "self": {
-                "href": "http://localhost:8084/movies/3"
-            }
-        },
-        "movieId": "MOVIE-00003",
-        "screenId": "토르_상영관"
-    }
-]
-```
-
-
-
-### 영화 예매 처리 : 고객이 영화와 좌석번호를 선택하여 예매를 요청하면 결재요청(pay)은 (req/res)되며, 결재 성공 시 극장(theater) 상영관 예매가 완료 됩니다.
-
-* 예매 요청
-```
-http POST http://app:8080/reservations/new bookId="B1001" customerId="C1001" movieId="MOVIE-00001" seatId="A-1"
-http POST http://app:8080/reservations/new bookId="B1002" customerId="C1002" movieId="MOVIE-00002" seatId="B-1"
-http POST http://localhost:8081/reservations/new bookId="B1003" customerId="C1003" movieId="MOVIE-00003" seatId="C-1"
-```
-
-* PAY 서비스 내 APPROVALS (승인내역) 테이블 데이터 생성 완료
-
-```json
-"approvals": [
-    {
-        "_links": {
-            "approval": {
-                "href": "http://localhost:8082/approvals/1"
-            },
-            "self": {
-                "href": "http://localhost:8082/approvals/1"
-            }
-        },
-        "bookId": "B1001",
-        "customerId": null,
-        "movieId": "MOVIE-00001",
-        "payId": "33bfd6df-6fbd-4d4d-b739-659c5199601e",
-        "seatId": "A-1"
-    },
-    {
-        "_links": {
-            "approval": {
-                "href": "http://localhost:8082/approvals/2"
-            },
-            "self": {
-                "href": "http://localhost:8082/approvals/2"
-            }
-        },
-        "bookId": "B1002",
-        "customerId": null,
-        "movieId": "MOVIE-00002",
-        "payId": "d934f33b-b9f7-4c97-99ab-69a09e0c9612",
-        "seatId": "B-1"
-    },
-    {
-        "_links": {
-            "approval": {
-                "href": "http://localhost:8082/approvals/3"
-            },
-            "self": {
-                "href": "http://localhost:8082/approvals/3"
-            }
-        },
-        "bookId": "B1003",
-        "customerId": null,
-        "movieId": "MOVIE-00003",
-        "payId": "bdcc11fd-12b7-4c4b-b09f-79ad5600f85c",
-        "seatId": "C-1"
-    }
-]
-```
-
-* App 서비스 내 RESERVATIONS (예매내역) 테이블 데이터 생성 완료
-
-```js
-"reservations": [
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/1"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/1"
-            }
-        },
-        "bookId": "B1001",
-        "bookedYn": "Y",
-        "customerId": "C1001",
-        "movieId": "MOVIE-00001",
-        "payId": "8044786d-c478-417e-84c4-11fe8e60f1f3",
-        "seatId": "A-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/2"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/2"
-            }
-        },
-        "bookId": "B1002",
-        "bookedYn": "Y",
-        "customerId": "C1002",
-        "movieId": "MOVIE-00002",
-        "payId": "3d95b581-55c6-47be-ba99-76e2239088fe",
-        "seatId": "B-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/3"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/3"
-            }
-        },
-        "bookId": "B1003",
-        "bookedYn": "Y",
-        "customerId": "C1003",
-        "movieId": "MOVIE-00003",
-        "payId": "57b41744-be82-469a-abb0-ed68ada367e1",
-        "seatId": "C-1"
-    }
-]
-```
-
-* THEATER 서비스 내 MOVIE_SEATS (좌석배정내역) 테이블 데이터 생성 완료
-
-```json
-"movieSeats": [
-    {
-        "_links": {
-            "movieSeat": {
-                "href": "http://localhost:8084/movieSeats/6"
-            },
-            "self": {
-                "href": "http://localhost:8084/movieSeats/6"
-            }
-        },
-        "bookId": "B1001",
-        "screenId": "어벤져스_상영관",
-        "seatId": "A-1",
-        "status": "Reserved"
-    },
-    {
-        "_links": {
-            "movieSeat": {
-                "href": "http://localhost:8084/movieSeats/7"
-            },
-            "self": {
-                "href": "http://localhost:8084/movieSeats/7"
-            }
-        },
-        "bookId": "B1002",
-        "screenId": "아이언맨_상영관",
-        "seatId": "B-1",
-        "status": "Reserved"
-    },
-    {
-        "_links": {
-            "movieSeat": {
-                "href": "http://localhost:8084/movieSeats/8"
-            },
-            "self": {
-                "href": "http://localhost:8084/movieSeats/8"
-            }
-        },
-        "bookId": "B1003",
-        "screenId": "토르_상영관",
-        "seatId": "C-1",
-        "status": "Reserved"
-    }
-]
-```
-
-
-### 영화 예매 취소 처리 : 고객이 특정 예약을 취소하면 결재(pay) 및 해당 극장(theater) 예약이 취소 됩니다.
-
-* 예약 취소 요청
-```
-http DELETE http://localhost:8081/reservations/B1001    
-http DELETE http://localhost:8081/reservations/B1002
-http DELETE http://localhost:8081/reservations/B1003
-```
-
-* PAY 서비스 내 APPROVALS (승인내역) 테이블 데이터 삭제 완료
-```
-        "approvals": []
-```
-
-* APP 서비스 내 RESERVATIONS (예매내역) 테이블 STASUS 갱신 완료 
-
-```json
-"reservations": [
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/1"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/1"
-            }
-        },
-        "bookId": "B1001",
-        "bookedYn": "N",
-        "customerId": "C1001",
-        "movieId": "MOVIE-00001",
-        "payId": "8044786d-c478-417e-84c4-11fe8e60f1f3",
-        "seatId": "A-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/2"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/2"
-            }
-        },
-        "bookId": "B1002",
-        "bookedYn": "N",
-        "customerId": "C1002",
-        "movieId": "MOVIE-00002",
-        "payId": "3d95b581-55c6-47be-ba99-76e2239088fe",
-        "seatId": "B-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/3"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/3"
-            }
-        },
-        "bookId": "B1003",
-        "bookedYn": "N",
-        "customerId": "C1003",
-        "movieId": "MOVIE-00003",
-        "payId": "57b41744-be82-469a-abb0-ed68ada367e1",
-        "seatId": "C-1"
-    }
-]
-```
-
-* THEATER 서비스 내 MOVIE_SEATS (좌석배정내역) 테이블 STATUS 갱신 완료
-
-```json
-"reservations": [
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/1"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/1"
-            }
-        },
-        "bookId": "B1001",
-        "bookedYn": "N",
-        "customerId": "C1001",
-        "movieId": "MOVIE-00001",
-        "payId": "8044786d-c478-417e-84c4-11fe8e60f1f3",
-        "seatId": "A-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/2"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/2"
-            }
-        },
-        "bookId": "B1002",
-        "bookedYn": "N",
-        "customerId": "C1002",
-        "movieId": "MOVIE-00002",
-        "payId": "3d95b581-55c6-47be-ba99-76e2239088fe",
-        "seatId": "B-1"
-    },
-    {
-        "_links": {
-            "reservation": {
-                "href": "http://localhost:8081/reservations/3"
-            },
-            "self": {
-                "href": "http://localhost:8081/reservations/3"
-            }
-        },
-        "bookId": "B1003",
-        "bookedYn": "N",
-        "customerId": "C1003",
-        "movieId": "MOVIE-00003",
-        "payId": "57b41744-be82-469a-abb0-ed68ada367e1",
-        "seatId": "C-1"
-    }
-]
-```
-
----
-## Gateway 적용
-
-* 게이트웨이의 설정은 8080이며, 예매관리/결재관리 및 극장정보등 마이크로서비스에 대한 일원화 된 접점을 제공하기 위한 설정이다.
-```
-app 서비스 : 8081
-pay 서비스 : 8082
-movie 서비스 : 8083
-theater 서비스 : 8084
-notice 서비스 : 8086
-```
-
-* gateway > applitcation.yml 설정
-
-![image](https://user-images.githubusercontent.com/81547613/119323918-2d9af100-bcba-11eb-8378-1338b6337b18.png)
-
-### Gateway 테스트
-
-* Gateway 테스트는 다음과 같이 확인하였다.
-
-> kubectl get all
-![image](https://user-images.githubusercontent.com/81547613/119357273-5505b400-bce2-11eb-854d-12930219b3ad.png)
-
-> External IP:8080 을 통한 API호출을 통해 http://app:8080 으로부터 응답을 받음
-![image](https://user-images.githubusercontent.com/81547613/119356977-fdffdf00-bce1-11eb-8dc6-b098b5ef0975.png)
-
----
-## 동기식 호출 과 Fallback 처리
-
-영화 예약(app)후 결재처리(pay) 간의 호출은 동기식 일관성을 유지하기 위하여 FeignClient 를 이용하여 호출하도록 한다. 
-
-### 동기식 호출 영화 예약 후 결재 처리
-#### Local 환경에서 확인
-
-* App Service는 실행 상태 / Pay Service는 중단 상태
-```http
-http POST http://localhost:8081/reservations/new bookId="B1001" customerId="C1001" movieId="MOVIE-00001" seatId="A-1"
-```
-
-* Response Message : Pay disapproved가 뜨면서 Pay 서비스를 확인하라는 문구를 보낸다.
-```
->http POST http://localhost:8081/reservations/new bookId="B1001" customerId="C1001" movieId="MOVIE-00001" seatId="A-1"
-HTTP/1.1 400
-Connection: close
+### 예매하기
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/reservations/new bookId="B1003" customerId="C1003" movieId="MOVIE-00003" seatId="C-1"
+HTTP/1.1 200 OK
 Content-Type: application/json;charset=UTF-8
-Date: Mon, 24 May 2021 05:30:15 GMT
+Date: Wed, 09 Jun 2021 05:26:09 GMT
+transfer-encoding: chunked
+
+{
+    "bookId": "B1003",
+    "bookedYn": "Y",
+    "customerId": "C1003",
+    "id": 1,
+    "movieId": "MOVIE-00003",
+    "payId": "5e6e5b3e-00d4-4aaf-8e58-50ac08ad5da0",
+    "seatId": "C-1"
+}
+
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/reservations/new bookId="B1001" customerId="C1001" movieId="MOVIE-00001" seatId="A-1"
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 05:28:35 GMT
+transfer-encoding: chunked
+
+{
+    "bookId": "B1001",
+    "bookedYn": "Y",
+    "customerId": "C1001",
+    "id": 2,
+    "movieId": "MOVIE-00001",
+    "payId": "a09e0958-7637-4944-8da0-3a76b3532cae",
+    "seatId": "A-1"
+}
+
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/reservations/new bookId="B1002" customerId="C1002" movieId="MOVIE-00002" seatId="B-1"
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 05:29:02 GMT
+transfer-encoding: chunked
+
+{
+    "bookId": "B1002",
+    "bookedYn": "Y",
+    "customerId": "C1002",
+    "id": 3,
+    "movieId": "MOVIE-00002",
+    "payId": "f4e117e7-0447-44cb-a1e9-9994c1c3b5bd",
+    "seatId": "B-1"
+}
+```
+- 점검
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ ./k8s-test-count-script.sh
+reservations: 3
+approvals: 3
+movieManagements: 3
+movieSeats: 3
+movies: 3
+bookInfos: 3
+tickets: 3
+```
+- 정상적으로 데이터가 생성된 것을 확인할 수 있다.
+
+---
+###  고객센타
+- 시나리오 
+  - 각각의 서비스에 필요한 정보는 고객센터로 취합된다.
+  - 고객센터는 취합된 정보를 view통해 조회하여 서비스가 가능하다.
+```sh
+root@siege:/# http GET http://customercenter:8080/searchBook?bookId=C1002
+HTTP/1.1 200
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 13:38:05 GMT
 Transfer-Encoding: chunked
 
 {
-    "details": "uri=/reservations/new",
-    "message": "[B1001] Pay disapproved, You must confirm Pay Service",
-    "timestamp": "2021-05-24T05:30:15.807+0000"
-}
-```
-
-```
-- Fallback 처리 결과 
-- Spring Boot Log Message
-2021-05-24 14:02:11.708 DEBUG 25811 --- [strix-pay-api-1] theater.external.ApprovalService         : [ApprovalService#paymentRequest] ---> GET http://localhost:8082/approved?bookId=B1001&movieId=MOVIE-00001&seatId=A-1 HTTP/1.1
-2021-05-24 14:02:11.714 DEBUG 25811 --- [strix-pay-api-1] theater.external.ApprovalService         : [ApprovalService#paymentRequest] <--- ERROR ConnectException: Connection refused (Connection refused) (5ms)
-2021-05-24 14:02:11.719  INFO 25811 --- [strix-pay-api-1] t.f.ApprovalServiceFallbackFactory       : ========= FallbackFactory called: Confirm Pay Service =========
-2021-05-24 14:02:11.719  INFO 25811 --- [strix-pay-api-1] t.f.ApprovalServiceFallbackFactory       : Error Message: Connection refused (Connection refused) executing GET http://localhost:8082/approved?bookId=B1001&movieId=MOVIE-00001&seatId=A-1
-2021-05-24 14:02:11.721  INFO 25811 --- [nio-8081-exec-1] theater.ReservationController            : ========= Pay didn't Approve. Confirm Pay Service.=========
-```
-
-#### 쿠버네티스에서 확인
-
----
-## 비동기식 호출 / 장애격리 / 성능
-
-영화 예매 취소(app) 요청과 결재 취소(pay), 해당 극장 영화/좌석 취소(theater)는 비동기식 처리이므로, 다른 시스템의 상태가 영화 예매 취소(app)의 서비스 호출에 영향이 없도록 구성한다.
-즉, 결재 취소 시스템이 비정상일 경우 영화/좌석은 취소되지 않고, 결재 시스템이 재기동 되면 이벤트를 구독하여 취소시킨다.
-
-* 영화 예매 취소 전 영화/좌석 예약 상태
-
-```json
-{
-    "_links": {
-        "movieSeat": {
-            "href": "http://localhost:8084/movieSeats/9"
-        },
-        "self": {
-            "href": "http://localhost:8084/movieSeats/9"
-        }
-    },
-    "bookId": "B1004",
-    "screenId": "어벤져스_상영관",
-    "seatId": "D-1",
+    "bookId": "C1002",
+    "customerId": "D1002",
+    "movieId": "MOVIE-00002",
+    "seatId": "E-1",
     "status": "Reserved"
 }
 ```
-
-* PAY 서비스 다운
-```
-2021-05-24 15:04:04.998  INFO 8732 --- [       Thread-8] o.s.i.monitor.IntegrationMBeanExporter   : Summary on shutdown: _org.springframework.integration.errorLogger.handler
-2021-05-24 15:04:05.000  INFO 8732 --- [       Thread-8] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
-2021-05-24 15:04:05.003  INFO 8732 --- [       Thread-8] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
-[INFO] ----일괄 작업을 끝내시겠습니까 (Y/N)? y
-
-C:\Dev-Workspace\reqres_theater\pay>
-```
-
-* 영화 예매 취소 요청
-```
->http DELETE http://localhost:8081/reservations/B1004
-HTTP/1.1 204
-Date: Mon, 24 May 2021 06:05:26 GMT
-```
-
-* 극장 영화/좌석 예약 상태 확인 : 예약취소되지 않음 (Reserved)
-
-```json
-{
-    "_links": {
-        "movieSeat": {
-            "href": "http://localhost:8084/movieSeats/9"
-        },
-        "self": {
-            "href": "http://localhost:8084/movieSeats/9"
-        }
-    },
-    "bookId": "B1004",
-    "screenId": "어벤져스_상영관",
-    "seatId": "D-1",
-    "status": "Reserved"
-}
-```
-
----
-#운영
----
-## 소스 패키징
-
-### 클라우드 배포를 위한 패키징 작업
-```
-cd app
-mvn clean && mvn package
-cd ..
-cd pay
-mvn clean && mvn package
-cd ..
-cd movie
-mvn clean && mvn package
-cd ..
-cd theater
-mvn clean && mvn package
-cd ..
-cd gateway
-mvn clean && mvn package
-cd ..
-```
-	
-![image](https://user-images.githubusercontent.com/80744278/119227564-8a2ace80-bb49-11eb-88ce-e2df20a617a4.png)
-
----
-## 클라우드 배포/운영 파이프라인
-
-### aws 클라우드에 배포하기 위한 주요 정보 설정
-
-```
-클러스터 명 : user02-eks
-```
-
-### aws config - IAM => 엑세스관리 > 사용자
-```json
-$ aws configure
-AWS Access Key ID [None]: AKIAQYU2ROSK4JEJH2VM
-AWS Secret Access Key [None]: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Default region name [None]: ap-northeast-2
-Default output format [None]: json
-
-#설정확인
-$cat ~/.aws/config
-[default]
-region = ap-northeast-2
-output = json
-
-#인증정보 확인
-$cat ~/.aws/credentials
-[default]
-aws_access_key_id = AKIAQYU2ROSK4JEJH2VM
-aws_secret_access_key = ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-```
-
-### EKS생성 (클러스터생성 및 설정)
-```json
-$eksctl create cluster --name team02-eks --version 1.17 --nodegroup-name standard-workers --node-type t3.medium --nodes 4 --nodes-min 1 --nodes-max 4
-$kubectl get nodes
-
-$aws eks --region ap-northeast-2 update-kubeconfig --name team02-eks
-$kubectl config current-context
-$kubectl get all
-```
-
-### 네임스페이스 생성
-
-```shell
-# Spring Cloud 프로젝트 배포를 위한 namespace 
-kubectl create ns team02
-# Kafka를 배포하기 위한 namespace
-kubectl create ns kafka
-# 생성된 namespace 목록을 가져온다.
-kubectl get ns
-```
-
-![image](https://user-images.githubusercontent.com/80908892/119248843-d2d89b00-bbce-11eb-8359-6d6af7ba5fb1.png)
-
-### 기본 namespace설정 및 서비스확인
-
+- 고객선테에서 정상응답을 경우(발권서비스 - req/res)
 ```sh
-kubectl config set-context $(kubectl config current-context) --namespace=team02
-kubectl get all
+root@siege-5b99b44c9c-pv7ll:/# http http://ticketing:8080/print/B1003
+HTTP/1.1 200
+Content-Length: 3
+Content-Type: text/plain;charset=UTF-8
+Date: Wed, 09 Jun 2021 15:32:43 GMT
+
+B-2
 ```
-
-### helm(3.X설치)
-
-> helm 설치 스크립트를 다운 받음
-
-```shll
-curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 > get_helm.sh
-```
-
-```shell
-root@labs-1227910482:/home/project/team# 
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100 11248  100 11248    0     0  33981      0 --:--:-- --:--:-- --:--:-- 33981
-```
-
-> 다운 받은 스크립트 실행
-
-```shell
-chmod 700 get_helm.sh
-./get_helm.sh
-```
-
-```shell
-Downloading https://get.helm.sh/helm-v3.5.4-linux-amd64.tar.gz
-Verifying checksum... Done.
-Preparing to install helm into /usr/local/bin
-helm installed into /usr/local/bin/helm
-```
-
-> repository 추가
-
-```shell
-helm repo add incubator https://charts.helm.sh/incubator
-```
-
-```shell
-WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /root/.kube/config
-WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /root/.kube/config
-"incubator" has been added to your repositories
-root@labs-1227910482:/home/project/team# helm repo update
-WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /root/.kube/config
-WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /root/.kube/config
-Hang tight while we grab the latest from your chart repositories...
-...Successfully got an update from the "incubator" chart repository
-Update Complete. ⎈Happy Helming!⎈
-```
-
-### kafka설치
-
-```shell
-# kafka namespace에 kafka를 설치해준다.
-helm install my-kafka --namespace kafka incubator/kafka
-# kafka namespace에 kafka가 정상적으로 설치돼 있는지 확인
-kubectl get all -n kafka
-```
-
-
-### <span style="color:yellow">kafka UI</span>
+- 고객센터 서비스 다운(발권서비스 - req/res)
 ```sh
-helm repo add kafka-ui https://provectus.github.io/kafka-ui
-helm install kafka-ui  --namespace kafka kafka-ui/kafka-ui --set envs.config.KAFKA_CLUSTERS_0_NAME=my-kafka --set envs.config.KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=my-kafka:9092
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl delete pod/customercenter-6468986d85-m2mx5
+pod "customercenter-6468986d85-m2mx5" deleted
 ```
+- 고객센터 서비스가 장애일 경우(발권서비스 - req/res)
+```sh
+root@siege-5b99b44c9c-pv7ll:/# http http://ticketing:8080/print/B1003
+HTTP/1.1 200
+Content-Length: 20
+Content-Type: text/plain;charset=UTF-8
+Date: Wed, 09 Jun 2021 15:37:01 GMT
+
+Fallback - ticketing
+```
+- 고객선터에서 예약정보 삭제(발권서비스 - req/res)
+
+![image](https://user-images.githubusercontent.com/80908892/121385949-8dfd8400-c984-11eb-8a6e-c4378ee2a788.png)
+
+- 고객센터의 예약정보가 비정상일 경우 발권 불가(발권서비스 - req/res)
+```sh
+root@siege-5b99b44c9c-pv7ll:/# http http://ticketing:8080/print/B1003
+HTTP/1.1 200
+Content-Length: 17
+Content-Type: text/plain;charset=UTF-8
+Date: Wed, 09 Jun 2021 15:42:20 GMT
+
+check your BookId
+```
+
+---
+## 비기능 요구사항
+---
+### Autoscale (HPA)
+- 사나리오
+  - 고객센터(customercenter)에서 제공되는 서비스의 기능에 성능부하 로직을 적용한다.- isolations
+  - 서비스 부하에 따른 고객센터의 Autoscale을 확인한다.
+- metrics설치
 ```shell
-WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /home/kinux/.kube/config
-WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /home/kinux/.kube/config
-NAME: kafka-ui
-LAST DEPLOYED: Mon May 31 22:33:20 2021
-NAMESPACE: kafka
-STATUS: deployed
-REVISION: 1
-TEST SUITE: None
-NOTES:
-1. Get the application URL by running these commands:
-  export POD_NAME=$(kubectl get pods --namespace kafka -l "app.kubernetes.io/name=kafka-ui,app.kubernetes.io/instance=kafka-ui" -o jsonpath="{.items[0].metadata.name}")
-  echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace kafka port-forward $POD_NAME 8080:80
-  kubectl --namespace kafka port-forward svc/kafka-ui 9090:80
+kubectl apply -f  https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.3.7/components.yaml
 ```
-
-
-![image](https://user-images.githubusercontent.com/81547613/119323673-ee6ca000-bcb9-11eb-8564-863fe6384430.png)
-
-### 도커 이미지 만들고 레지스트리에 등록하기
-
-1. Docker를 이용해 이미지 Build
-2. AWS에 Container Registry 생성
-3. 생성된 ECR에 이미지를 Push
-
+- metrics설치 확인
 ```shell
-cd app
-docker build -t 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-app:v1 .
-aws ecr create-repository --repository-name user02-app --region ap-northeast-2
-docker push 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-app:v1
-cd ..
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl get all -n kube-system
+NAME                                  READY   STATUS    RESTARTS   AGE
+pod/aws-node-mqljh                    1/1     Running   0          3h21m
+pod/aws-node-q6zf2                    1/1     Running   0          3h21m
+pod/aws-node-qf5t4                    1/1     Running   0          3h21m
+pod/aws-node-whn2r                    1/1     Running   0          3h21m
+pod/coredns-76c9876f5-4mjpj           1/1     Running   0          3h28m
+pod/coredns-76c9876f5-d6jqd           1/1     Running   0          3h28m
+pod/kube-proxy-56sfh                  1/1     Running   0          3h21m
+pod/kube-proxy-5mt7k                  1/1     Running   0          3h21m
+pod/kube-proxy-nbjnr                  1/1     Running   0          3h21m
+pod/kube-proxy-snp72                  1/1     Running   0          3h21m
+pod/metrics-server-6648f5454b-ph7j6   1/1     Running   0          73s
 
-cd movie
-docker build -t 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-movie:v1 .
-aws ecr create-repository --repository-name user02-movie --region ap-northeast-2
-docker push 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-movie:v1
-cd ..
+NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)         AGE
+service/kube-dns         ClusterIP   10.100.0.10     <none>        53/UDP,53/TCP   3h28m
+service/metrics-server   ClusterIP   10.100.218.95   <none>        443/TCP         73s
 
-cd pay
-docker build -t 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-pay:v1 .
-aws ecr create-repository --repository-name user02-pay --region ap-northeast-2
-docker push 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-pay:v1
-cd ..
+NAME                        DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+daemonset.apps/aws-node     4         4         4       4            4           <none>          3h28m
+daemonset.apps/kube-proxy   4         4         4       4            4           <none>          3h28m
 
-cd theater
-docker build -t 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-theater:v1 .
-aws ecr create-repository --repository-name user02-theater --region ap-northeast-2
-docker push 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-theater:v1
-cd ..
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/coredns          2/2     2            2           3h28m
+deployment.apps/metrics-server   1/1     1            1           75s
 
-cd gateway
-docker build -t 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-gateway:v1 .
-aws ecr create-repository --repository-name user02-gateway --region ap-northeast-2
-docker push 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-gateway:v1
-cd ..
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/coredns-76c9876f5           2         2         2       3h28m
+replicaset.apps/metrics-server-6648f5454b   1         1         1       75s
 ```
-
-
-### deployment.yml로 서비스 배포
-
-### 각 마이크로 서비스를 yml 파일을 사용하여 배포 합니다.
-
-```yaml
+- 리소스 설정
+```sh
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: app
+  name: customercenter
   labels:
-    app: app
+    app: customercenter
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: app
+      app: customercenter
   template:
     metadata:
       labels:
-        app: app
+        app: customercenter
     spec:
       containers:
-        - name: app
-          image: 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-app:v1
+        - name: customercenter
+          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-customercenter:v1
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -953,525 +604,509 @@ spec:
             timeoutSeconds: 2
             periodSeconds: 5
             failureThreshold: 5
-
+          #리스소 설정
+          resources:
+            limits:
+              cpu: "500m"
+            requests:
+              cpu: "200m"
 ```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/customercenter$ kubectl autoscale deployment customercenter --cpu-percent=50 --min=1 --max=10
+horizontalpodautoscaler.autoscaling/customercenter autoscaled
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/customercenter$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          81m
+pod/customercenter-56d47c8c6-446qf   1/1     Running   0          5m26s
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          76m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          75m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          81m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          81m
+pod/siege                            1/1     Running   0          73m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          81m
+pod/ticketing-565fb6b5bc-2zw4n       1/1     Running   0          80m
 
-#### 배포처리
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         175m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         97m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   97m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         90m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         93m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         94m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         92m
+service/ticketing        ClusterIP      10.100.66.201    <none>                                                                        8080/TCP         91m
 
-```shell
-cd app
-kubectl apply -f ./kubernetes --namespace=team02
-cd ..
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           81m
+deployment.apps/customercenter   1/1     1            1           80m
+deployment.apps/gateway          1/1     1            1           76m
+deployment.apps/kakao            1/1     1            1           75m
+deployment.apps/movie            1/1     1            1           81m
+deployment.apps/pay              1/1     1            1           81m
+deployment.apps/theater          1/1     1            1           81m
+deployment.apps/ticketing        1/1     1            1           80m
 
-cd pay
-kubectl apply -f ./kubernetes --namespace=team02
-cd ..
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       81m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       5m29s
+replicaset.apps/customercenter-7b89f74f46   0         0         0       81m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       76m
+replicaset.apps/kakao-794487c556            1         1         1       76m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       81m
+replicaset.apps/pay-56967ccf97              1         1         1       81m
+replicaset.apps/theater-59b665f8d4          1         1         1       81m
+replicaset.apps/ticketing-565fb6b5bc        1         1         1       80m
 
-cd movie
-kubectl apply -f ./kubernetes --namespace=team02
-cd ..
-
-cd theater
-kubectl apply -f ./kubernetes --namespace=team02
-cd ..
-
-cd gateway
-kubectl create deploy gateway --image=052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-gateway:v1
-# gateway는 외부에서 접속이 가능하게 LoadBalancer형태로 deploy한다.
-kubectl expose deploy gateway --type="LoadBalancer" --port=8080
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   4%/50%    1         10        1          31s
 ```
-
-![image](https://user-images.githubusercontent.com/80908892/119253234-3c66a280-bbeb-11eb-9904-11bdedeebd69.png)
-
----
-## 동기식 호출 / 서킷 브레이킹 / 장애격리
-
-* 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현하였습니다.
-
-### Hystrix 를 설정:  
-
-요청처리 쓰레드에서 처리시간이 610 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
-
-
-```yaml
-# application.yml
-feign:
-  pay-api:
-    url: http://localhost:8082
-  httpclient:
-    connection-timeout: 1
-  hystrix:
-    enabled: true
-  client:
-    config:
-      default:
-        loggerLevel: BASIC
-hystrix:
-  command:
-    # 전역설정
-    default:
-      execution.isolation.thread.timeoutInMilliseconds: 610
+- TARGETS이 50% 설정된 것을 확인할 수 있다. 
+- 부하 발생 전
 ```
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          104m
+pod/customercenter-56d47c8c6-446qf   1/1     Running   0          28m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          99m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          99m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          104m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          104m
+pod/siege                            1/1     Running   0          96m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          104m
+pod/ticketing-565fb6b5bc-2zw4n       1/1     Running   0          103m
 
-### 부하테스트
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         3h18m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         120m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   120m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         113m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         116m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         117m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         115m
+service/ticketing        ClusterIP      10.100.66.201    <none>                                                                        8080/TCP         114m
 
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           104m
+deployment.apps/customercenter   1/1     1            1           104m
+deployment.apps/gateway          1/1     1            1           99m
+deployment.apps/kakao            1/1     1            1           99m
+deployment.apps/movie            1/1     1            1           104m
+deployment.apps/pay              1/1     1            1           104m
+deployment.apps/theater          1/1     1            1           104m
+deployment.apps/ticketing        1/1     1            1           103m
 
-* Siege 리소스 생성
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       104m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       28m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       104m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       99m
+replicaset.apps/kakao-794487c556            1         1         1       99m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       104m
+replicaset.apps/pay-56967ccf97              1         1         1       104m
+replicaset.apps/theater-59b665f8d4          1         1         1       104m
+replicaset.apps/ticketing-565fb6b5bc        1         1         1       104m
 
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   7%/50%    1         10        1          23m
 ```
-kubectl run siege --image=apexacme/siege-nginx 
+- 부하 생성
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/customercenter$ kubectl exec -it pod/siege -- /bin/bash
+root@siege:/# siege -c30 -t30S -v http://customercenter:8080/isolation
 ```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          105m
+pod/customercenter-56d47c8c6-446qf   1/1     Running   0          29m
+pod/customercenter-56d47c8c6-89fn7   0/1     Running   0          47s
+pod/customercenter-56d47c8c6-8hlqd   0/1     Running   0          31s
+pod/customercenter-56d47c8c6-phcpc   0/1     Running   0          47s
+pod/customercenter-56d47c8c6-rrp9t   0/1     Running   0          47s
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          100m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          99m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          104m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          105m
+pod/siege                            1/1     Running   0          97m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          104m
+pod/ticketing-565fb6b5bc-2zw4n       1/1     Running   0          104m
 
-* 실행
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         3h19m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         121m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   121m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         114m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         117m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         118m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         116m
+service/ticketing        ClusterIP      10.100.66.201    <none>                                                                        8080/TCP         115m
 
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           105m
+deployment.apps/customercenter   1/5     5            1           104m
+deployment.apps/gateway          1/1     1            1           100m
+deployment.apps/kakao            1/1     1            1           99m
+deployment.apps/movie            1/1     1            1           105m
+deployment.apps/pay              1/1     1            1           105m
+deployment.apps/theater          1/1     1            1           104m
+deployment.apps/ticketing        1/1     1            1           104m
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       105m
+replicaset.apps/customercenter-56d47c8c6    5         5         1       29m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       104m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       100m
+replicaset.apps/kakao-794487c556            1         1         1       99m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       105m
+replicaset.apps/pay-56967ccf97              1         1         1       105m
+replicaset.apps/theater-59b665f8d4          1         1         1       104m
+replicaset.apps/ticketing-565fb6b5bc        1         1         1       104m
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   2%/50%    1         10        5          24m
+
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          109m
+pod/customercenter-56d47c8c6-446qf   1/1     Running   0          33m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          5m5s
+pod/customercenter-56d47c8c6-8hlqd   1/1     Running   0          4m49s
+pod/customercenter-56d47c8c6-phcpc   1/1     Running   0          5m5s
+pod/customercenter-56d47c8c6-rrp9t   1/1     Running   0          5m5s
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          104m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          104m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          109m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          109m
+pod/siege                            1/1     Running   0          101m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          109m
+pod/ticketing-565fb6b5bc-2zw4n       1/1     Running   0          109m
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         3h23m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         126m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   125m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         118m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         121m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         122m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         120m
+service/ticketing        ClusterIP      10.100.66.201    <none>                                                                        8080/TCP         119m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           109m
+deployment.apps/customercenter   5/5     5            5           109m
+deployment.apps/gateway          1/1     1            1           104m
+deployment.apps/kakao            1/1     1            1           104m
+deployment.apps/movie            1/1     1            1           109m
+deployment.apps/pay              1/1     1            1           109m
+deployment.apps/theater          1/1     1            1           109m
+deployment.apps/ticketing        1/1     1            1           109m
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       109m
+replicaset.apps/customercenter-56d47c8c6    5         5         5       33m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       109m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       104m
+replicaset.apps/kakao-794487c556            1         1         1       104m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       109m
+replicaset.apps/pay-56967ccf97              1         1         1       109m
+replicaset.apps/theater-59b665f8d4          1         1         1       109m
+replicaset.apps/ticketing-565fb6b5bc        1         1         1       109m
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   3%/50%    1         10        5          28m
 ```
-kubectl exec -it pod/siege-5459b87f86-hlfm9 -c siege -- /bin/bash
-```
-
-* 부하 실행
-
-```bash
-siege -c200 -t60S -r10 -v --content-type "application/json" http://app:8080/isolations
-```
-
-#### 부하를 진행하기 위한 소스 추가
-
-1. App 서비스에 isolations로 요청이 들어온다.
-2. App 서비스에서 Pay 서비스의 isolations로 요청을 보낸다.
-3. 
-
-> ReservationController
-
-```java
-public class ReservationController {
-    @GetMapping("/isolations")
-    String isolation() {
-        return approvalService.isolation();
-    }
-}
-```
-
-> ApprovalService
-
-```java
-@FeignClient(name = "pay-api", url = "${feign.pay-api.url}",
-        configuration = HttpConfiguration.class,
-        fallbackFactory = ApprovalServiceFallbackFactory.class)
-public interface ApprovalService {
-
-    @GetMapping("/approved")
-    Approval paymentRequest(@RequestParam("bookId") String bookId
-            , @RequestParam("movieId") String movieId
-            , @RequestParam("seatId") String seatId
-    );
-
-    @GetMapping("/isolation")
-    String isolation();
-}
-```
-
-> ApprovalServiceFallbackFactory
-
-```java
-public class ApprovalServiceFallbackFactory implements FallbackFactory<ApprovalService> {
-
-    @Override
-    public ApprovalService create(Throwable cause) {
-        return new ApprovalService() {
-
-            @Override
-            public String isolation() {
-                return "fallback";
-            }
-        };
-    }
-}
-```
-
-#### Pay 서비스
-
-> ApprovalController
-
-```java
-@RequestMapping(value = "/isolation", method = RequestMethod.GET, produces = "application/json;charset=UTF-8")
-public String isolation(HttpServletRequest request, HttpServletResponse response) throws Exception {    
-    Random rng = new Random();
-    long loopCnt = 0;
-
-    while (loopCnt < 100) {
-        double r = rng.nextFloat();
-        double v = Math.sin(Math.cos(Math.sin(Math.cos(r))));
-        System.out.println(String.format("r: %f, v %f", r, v));
-        loopCnt++;
-    }
-    
-    return "real";
-}
-```
-
-- 부하 발생하여 CB가 발동하여 요청 실패처리하였고, 밀린 부하가 pay 서비스에서 처리되면서 
-다시 pay에서 서비스를 받기 시작 합니다
-
-![image](https://user-images.githubusercontent.com/80908892/119437873-f3812c00-bd59-11eb-93e2-760ff7784a0d.png)
-
-- report
-
-![image](https://user-images.githubusercontent.com/80908892/119437975-20cdda00-bd5a-11eb-86d5-36fec86da983.png)
-
----
-## 오토스케일 아웃
-
-### deployment.yml 설정
-
-```yaml
-spec:
-  containers:
-    - name: movie
-      image: 052937454741.dkr.ecr.ap-northeast-2.amazonaws.com/user02-movie:v1
-      ports:
-        - containerPort: 8080
-      readinessProbe:
-        httpGet:
-          path: '/actuator/health'
-          port: 8080
-        initialDelaySeconds: 10
-        timeoutSeconds: 2
-        periodSeconds: 5
-        failureThreshold: 10
-      livenessProbe:
-        httpGet:
-          path: '/actuator/health'
-          port: 8080
-        initialDelaySeconds: 120
-        timeoutSeconds: 2
-        periodSeconds: 5
-        failureThreshold: 5
-      resources:
-        limits:
-          cpu: "500m"
-        requests:
-          cpu: "200m"
-```
-
-### Auto Scale 설정
-
-```shell
-kubectl autoscale deployment movie --cpu-percent=50 --min=1 --max=10
-```
-
-### 부하기능 API 추가
-
-```java
-@RestController
-public class MovieManagementController {
-
-
-    @GetMapping("/hpa")
-    public String getHPA() {
-        Random rng = new Random();
-        long loopCnt = 0;
-
-        while (loopCnt < 100) {
-            double r = rng.nextFloat();
-            double v = Math.sin(Math.cos(Math.sin(Math.cos(r))));
-            System.out.println(String.format("r: %f, v %f", r, v));
-            loopCnt++;
-        }
-
-        return "hpa";
-    }
-}
-```
-
-### 부하기능 API 수행
-
-> 명령어
-
-```shell
-# stresstool Container에 접속
-kubectl exec -it pod/stresstool-85fb8c78db-77fb4 -- /bin/bash
-# stresstool Container에서 siege를 사용해 Stress Test를 시작해 Scale Out이 정상적으로 실행되는지 확인
-siege -c60 -t60S -v http://movie:8080/hpa
-```
-
-> 결과
-
-```shell
-HTTP/1.1 200     0.04 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.04 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.04 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.03 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.01 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.14 secs:       3 bytes ==> GET  /hpa
-HTTP/1.1 200     0.06 secs:       3 bytes ==> GET  /hpa
+- sacle out
+```sh 실행결과
+HTTP/1.1 200     0.11 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.11 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.17 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.07 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.11 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.09 secs:       4 bytes ==> GET  /isolation
+HTTP/1.1 200     0.39 secs:       4 bytes ==> GET  /isolation
 
 Lifting the server siege...
-Transactions:                   8314 hits
+Transactions:                   5024 hits
 Availability:                 100.00 %
-Elapsed time:                  59.19 secs
+Elapsed time:                  29.74 secs
 Data transferred:               0.02 MB
-Response time:                  0.42 secs
-Transaction rate:             140.46 trans/sec
+Response time:                  0.18 secs
+Transaction rate:             168.93 trans/sec
 Throughput:                     0.00 MB/sec
-Concurrency:                   59.42
-Successful transactions:        8314
+Concurrency:                   29.89
+Successful transactions:        5024
 Failed transactions:               0
-Longest transaction:            5.30
+Longest transaction:            1.12
 Shortest transaction:           0.00
 ```
-
-### 오토스케일링에 대한 모니터링:
-![image](https://user-images.githubusercontent.com/80908892/119321129-45bd4100-bcb7-11eb-81b3-bd83a29251da.png)
-
-
 ---
-## Config Map
-
-### config map 생성 후 조회
-
-> Config Map 생성
-
-```shell
-kubectl create configmap mid-cm --from-literal=mid=pg0000123
-configmap/mid-cm created
-```
-
-> Config Map 확인
-
-```shell
-kubectl get cm
-NAME     DATA   AGE
-mid-cm   1      42s
-```
-
-### Deployment.yml 설정
-
-```yaml
-env:
-- name: MID
-  valueFrom:
-    configMapKeyRef:
-      name: mid-cm
-      key: mid
-```
-
-### apllication.yml 설정
-
-```yaml
-pay:
-  mid: ${MID}
-```
-
-### Application 읽기
-
-ApprovalController.java
+### self-healing (liveness)
+- 사나리오
+  - 발권서비스(ticketing )에서 제공되는 livenessProbe로 /actuator/health를 활용한다.
+  - /actuator/health를 강제로 down시킬수 있는 url를 작성하여 liveness점검시 오류를 발생시킨다.
+  - 새로운 pod를 생성시키는지 확인한다.
 
 ```java
-@Value("${pay.mid}")
-String mid;
+package theatermy;
 
-@GetMapping("/cm")
-public String getCM() {
-    return mid;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/actuator")
+public class CustomHealthIndicator implements HealthIndicator {
+    private final AtomicReference<Health> health = new AtomicReference<>(Health.up().build());
+
+    @Override
+    public Health health() {
+        return health.get();
+    }
+
+    @PutMapping("/up")
+    public Health up() {
+        Health up = Health.up().build();
+        this.health.set(up);
+        return up;
+    }
+
+    @PutMapping("/down")
+    public Health down() {
+        Health down = Health.down().build();
+        this.health.set(down);
+        return down;
+    }
 }
 ```
-
-### 테스트 수행
-
-* pay:8080/cm 호출 시 키 값(pg0000123) 정상 
-
-```http
-root@stresstool-85fb8c78db-77fb4:/# http pay:8080/cm
-HTTP/1.1 200 
-Content-Length: 9
-Content-Type: text/plain;charset=UTF-8
-Date: Mon, 24 May 2021 15:04:29 GMT
-
-pg0000123
-```
-
-
----
-
-## Persistance Volume
-
-### PVC 관련 YAML 생성
-
-```shell
-ll
-
-total 24
-drwxr-xr-x  2 root root 6144 May 25 02:12 ./
-drwxr-xr-x 10 root root 6144 May 25 01:59 ../
--rw-r--r--  1 root root  872 May 25 02:12 efs-provisioner-deploy.yaml
--rw-r--r--  1 root root  126 May 25 01:59 efs-provisioner-storageclass.yaml
--rw-r--r--  1 root root 1330 May 25 01:59 rbac.yaml
--rw-r--r--  1 root root   89 May 25 01:59 service_account.yaml
-```
-
-```shell
-cat efs-provisioner-deploy.yaml 
-```
-
 ```yaml
-kind: Deployment
+management:
+  health:
+    status:
+      order: DOWN, MAINTENANCE, UNKOWN, UP
+      http-mapping:
+        DOWN: 503
+        MAINTENANCE: 503
+        UNKNOWN: 200
+        UP: 200
+  endpoints:
+      web:
+          exposure:
+              include: "*"
+spring:
+  mvc:
+    hiddenmethod:
+      filter:
+        enabled: true
+```
+- actuator 시뮬레이션 
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl exec -it pod/siege -- /bin/bash
+root@siege:/# http http://ticketing:8080/actuator/health
+HTTP/1.1 200
+Content-Type: application/vnd.spring-boot.actuator.v2+json;charset=UTF-8
+Date: Wed, 09 Jun 2021 07:13:07 GMT
+Transfer-Encoding: chunked
+
+{
+    "status": "UP"
+}
+```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          3h34m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          110m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          3h30m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          3h29m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          3h34m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          3h34m
+pod/siege                            1/1     Running   0          3h27m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          3h34m
+pod/ticketing-56f99d87d-lxp59        1/1     Running   0          89s
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         5h9m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         3h51m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   3h50m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         3h44m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         3h47m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         3h47m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         3h45m
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP         13m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           3h34m
+deployment.apps/customercenter   1/1     1            1           3h34m
+deployment.apps/gateway          1/1     1            1           3h30m
+deployment.apps/kakao            1/1     1            1           3h29m
+deployment.apps/movie            1/1     1            1           3h34m
+deployment.apps/pay              1/1     1            1           3h34m
+deployment.apps/theater          1/1     1            1           3h34m
+deployment.apps/ticketing        1/1     1            1           91s
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       3h34m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       139m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       3h34m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       3h30m
+replicaset.apps/kakao-794487c556            1         1         1       3h29m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       3h34m
+replicaset.apps/pay-56967ccf97              1         1         1       3h34m
+replicaset.apps/theater-59b665f8d4          1         1         1       3h34m
+replicaset.apps/ticketing-56f99d87d         1         1         1       92s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   5%/50%    1         10        1          134m
+```
+```sh
+root@siege:/# http put http://ticketing:8080/actuator/down
+HTTP/1.1 200
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 08:15:55 GMT
+Transfer-Encoding: chunked
+
+{
+    "status": "DOWN"
+}
+```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          3h36m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          112m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          3h31m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          3h31m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          3h36m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          3h36m
+pod/siege                            1/1     Running   0          3h29m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          3h36m
+pod/ticketing-56f99d87d-lxp59        0/1     Running   1          3m23s
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         5h11m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         3h53m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   3h52m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         3h45m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         3h49m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         3h49m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         3h47m
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP         15m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           3h36m
+deployment.apps/customercenter   1/1     1            1           3h36m
+deployment.apps/gateway          1/1     1            1           3h31m
+deployment.apps/kakao            1/1     1            1           3h31m
+deployment.apps/movie            1/1     1            1           3h36m
+deployment.apps/pay              1/1     1            1           3h36m
+deployment.apps/theater          1/1     1            1           3h36m
+deployment.apps/ticketing        0/1     1            0           3m25s
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       3h36m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       141m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       3h36m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       3h31m
+replicaset.apps/kakao-794487c556            1         1         1       3h31m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       3h36m
+replicaset.apps/pay-56967ccf97              1         1         1       3h36m
+replicaset.apps/theater-59b665f8d4          1         1         1       3h36m
+replicaset.apps/ticketing-56f99d87d         1         1         0       3m26s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   6%/50%    1         10        1          136m
+
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          3h37m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          112m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          3h32m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          3h32m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          3h37m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          3h37m
+pod/siege                            1/1     Running   0          3h29m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          3h37m
+pod/ticketing-56f99d87d-lxp59        1/1     Running   1          3m52s
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         5h11m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         3h53m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   3h53m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         3h46m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         3h49m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         3h50m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         3h48m
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP         16m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           3h37m
+deployment.apps/customercenter   1/1     1            1           3h37m
+deployment.apps/gateway          1/1     1            1           3h32m
+deployment.apps/kakao            1/1     1            1           3h32m
+deployment.apps/movie            1/1     1            1           3h37m
+deployment.apps/pay              1/1     1            1           3h37m
+deployment.apps/theater          1/1     1            1           3h37m
+deployment.apps/ticketing        1/1     1            1           3m54s
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       3h37m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       141m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       3h37m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       3h32m
+replicaset.apps/kakao-794487c556            1         1         1       3h32m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       3h37m
+replicaset.apps/pay-56967ccf97              1         1         1       3h37m
+replicaset.apps/theater-59b665f8d4          1         1         1       3h37m
+replicaset.apps/ticketing-56f99d87d         1         1         1       3m55s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          136m
+```
+```sh
+root@siege:/# http http://ticketing:8080/actuator/health
+HTTP/1.1 200
+Content-Type: application/vnd.spring-boot.actuator.v2+json;charset=UTF-8
+Date: Wed, 09 Jun 2021 08:19:03 GMT
+Transfer-Encoding: chunked
+
+{
+    "status": "UP"
+}
+```
+---
+### zero-down (readiness)
+- 사나리오
+  - 발권서비스(ticketing )에서 제공되는 readinessProbe로 /actuator/health를 활용한다.(liveness는 제거)
+  - 2개의 pod를 배포하여 두 서비스에 골고루 요청이 배분되는지 확인한다.
+  - 중간에 하나의 서비스에 대해서 /actuator/health를 강제로 down시킬수 있는 url를 작성하여 readiness오류 발생시킨다.
+  - 한쪽으로만 요청이 흘러가는지 확인한다.
+```sh
 apiVersion: apps/v1
+kind: Deployment
 metadata:
-  namespace: team02
-  name: efs-provisioner
+  name: ticketing
+  labels:
+    app: ticketing
 spec:
+  #레플리카 2개로
+  replicas: 2
   selector:
     matchLabels:
-      app: efs-provisioner
-  replicas: 1
-  strategy:
-    type: Recreate
+      app: ticketing
   template:
     metadata:
       labels:
-        app: efs-provisioner
+        app: ticketing
     spec:
-      serviceAccount: efs-provisioner
       containers:
-        - name: efs-provisioner
-          image: quay.io/external_storage/efs-provisioner:v2.4.0
-          env:
-            - name: FILE_SYSTEM_ID
-              value: fs-1d2e9d7d
-            - name: AWS_REGION
-              value: ap-northeast-2
-            - name: PROVISIONER_NAME
-              value: my-aws.com/aws-efs
-          volumeMounts:
-            - name: pvcs
-              mountPath: /pvcs
-      volumes:
-        - name: pvcs
-          nfs:
-            server: fs-1d2e9d7d.efs.ap-northeast-2.amazonaws.com
-            path: /
-```
-
-### YAML 파일 적용 및 SC, PVC 상태확인
-
-```shell
-kubectl apply -f .
-```
-
-```shell
-serviceaccount/efs-provisioner created
-clusterrole.rbac.authorization.k8s.io/efs-provisioner-runner created
-clusterrolebinding.rbac.authorization.k8s.io/run-efs-provisioner created
-role.rbac.authorization.k8s.io/leader-locking-efs-provisioner created
-rolebinding.rbac.authorization.k8s.io/leader-locking-efs-provisioner created
-deployment.apps/efs-provisioner configured
-storageclass.storage.k8s.io/efs-provisioner configured
-```
-
-```shell
-kubectl get sc
-```
-
-```shell
-NAME              PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
-aws-efs           my-aws.com/aws-efs      Delete          Immediate              false                  10h
-efs-provisioner   user02-efs              Delete          Immediate              false                  11h
-gp2 (default)     kubernetes.io/aws-ebs   Delete          WaitForFirstConsumer   false                  21h
-```
-
-> 서비스 확인
-
-```shell
-kubectl get pvc
-```
-
-```
-NAME      STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
-aws-efs   Bound    pvc-0f90e1d5-8edd-491d-bcfe-4c8f86a606b3   1Mi        RWX            aws-efs        10h
-```
-
-### PV 적용한 POD(mypod) 내 텍스트파일 생성
-```
-root@labs-1227910482:/home/project/reqres_theater/movie/kubernetes# kubectl exec -it pod/mypod -- bin/bash
-```
-```
-root@mypod:/mnt/aws# echo "team02 message.!!!" >> msg.txt
-echo "team02 message.vi!" >> msg.txt
-root@mypod:/mnt/aws# ls
-msg.txt
-```
-```
-root@mypod:/mnt/aws# cat msg.txt 
-team02 message.vi!
-```
-
-### MOVIE POD 내 텍스트파일 생성여부 확인
-
-```shell
-kubectl exec -it pod/movie-67d777cc7d-78j9r -- bin/sh
-```
-
-```shell
-/ # ls
-app.jar  dev      home     media    opt      root     sbin     sys      usr
-bin      etc      lib      mnt      proc     run      srv      tmp      var
-/ # cd mnt
-/mnt # ls
-aws
-/mnt # cd aws
-```
-
-```shell
-/mnt/aws # ls
-msg.txt
-/mnt/aws # cat msg.txt 
-team02 message.vi!
-```
-
----
-## 헥사고날 아키텍처 다이어그램 도출 (Polyglot)
-![image](https://user-images.githubusercontent.com/80744278/119462464-b7f75980-bd7b-11eb-8351-65499d0907bf.png)
-
-## 폴리글랏 퍼시스턴스
-
-* MOVIE 시스템은 HSQLDB 사용
-```
-위치 : /reqres_theater/movie/pom.xml
-```
-![image](https://user-images.githubusercontent.com/81547613/119462389-a01fd580-bd7b-11eb-9a3b-ac4e9f594d67.png)
-
-```
-위치 : /reqres_theater/movie/src/main/resources/application.yml
-```
-![image](https://user-images.githubusercontent.com/81547613/119462509-c2195800-bd7b-11eb-867b-0e6cfc5b4d67.png)
-
-* 다른 시스템은 모두 H2DB 사용
-```
-위치 : /reqres_theater/app/pom.xml
-```
-![image](https://user-images.githubusercontent.com/80744278/119217655-83369880-bb16-11eb-95f9-588fcfcebcbe.png)
-
-
-
----
-## Zero-downtime deploy (Readiness Probe)
-
-### 현재 POD 개수 확인 (2개)
-
-```shell
-NAME                         READY   STATUS    RESTARTS   AGE
-pod/movie-5f6c5757cb-5q2j8   1/1     Running   0          7m43s
-pod/movie-5f6c5757cb-m7brh   1/1     Running   0          5m13s
-pod/multitool                1/1     Running   1          10h
-pod/order-666f44f458-rj6tt   1/1     Running   1          10h
-pod/stresstool               1/1     Running   0          28m
-```
-
-### deployment.yml에 readiness 옵션을 추가 
-
-```shell
-- deployment.yml
-#####################################################
+        - name: ticketing
+          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-ticketing:v2
+          ports:
+            - containerPort: 8080
           readinessProbe:
             httpGet:
               path: '/actuator/health'
@@ -1480,158 +1115,712 @@ pod/stresstool               1/1     Running   0          28m
             timeoutSeconds: 2
             periodSeconds: 5
             failureThreshold: 10
-#####################################################
+          # livenessProbe:
+          #   httpGet:
+          #     path: '/actuator/health'
+          #     port: 8080
+          #   initialDelaySeconds: 120
+          #   timeoutSeconds: 2
+          #   periodSeconds: 5
+          #   failureThreshold: 5
 ```
-
-### 부하 기능 API 추가
+- 서비스 pod를 확인할 수 있도록 코드 추가
 ```java
-- MovieManagementController.java
-#####################################################
-@GetMapping("/serviceAddress")
-public String getServiceAddress () {
-    String serviceAddress = null;
-    if (serviceAddress == null) {
-        serviceAddress = findMyHostname() + "/" + findMyIpAddress();
-    }
-    return serviceAddress;
-}
+  @GetMapping("/serviceAddress")
+  public String getServiceAddress() {
+    return findMyHostname() + "/" + findMyIpAddress();
+  }
 
-private String findMyHostname() {
+  private String findMyHostname() {
     try {
-        return InetAddress.getLocalHost().getHostName();
+      return InetAddress.getLocalHost().getHostName();
     } catch (UnknownHostException e) {
-        return "unknown host name";
+      return "unknown host name";
     }
-}
+  }
 
-private String findMyIpAddress() {
+  private String findMyIpAddress() {
     try {
-        return InetAddress.getLocalHost().getHostAddress();
+      return InetAddress.getLocalHost().getHostAddress();
     } catch (UnknownHostException e) {
-        return "unknown IP address";
+      return "unknown IP address";
     }
+  }
+```
+- 파드 생성 확인
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          3h55m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          130m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          3h50m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          3h49m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          3h54m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          3h55m
+pod/siege                            1/1     Running   0          3h47m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          3h54m
+pod/ticketing-6769d67cdd-5bv9q       1/1     Running   0          3m44s
+pod/ticketing-6769d67cdd-qtdv5       1/1     Running   0          2m15s
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         5h29m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         4h11m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   4h11m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         4h4m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         4h7m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         4h8m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         4h6m
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP         34m
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           3h55m
+deployment.apps/customercenter   1/1     1            1           3h54m
+deployment.apps/gateway          1/1     1            1           3h50m
+deployment.apps/kakao            1/1     1            1           3h49m
+deployment.apps/movie            1/1     1            1           3h55m
+deployment.apps/pay              1/1     1            1           3h55m
+deployment.apps/theater          1/1     1            1           3h54m
+deployment.apps/ticketing        2/2     2            2           21m
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       3h55m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       159m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       3h54m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       3h50m
+replicaset.apps/kakao-794487c556            1         1         1       3h49m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       3h55m
+replicaset.apps/pay-56967ccf97              1         1         1       3h55m
+replicaset.apps/theater-59b665f8d4          1         1         1       3h54m
+replicaset.apps/ticketing-56f99d87d         0         0         0       21m
+replicaset.apps/ticketing-6769d67cdd        2         2         2       3m47s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          154m
+```
+- 1초 단위로 요청 전송
+```sh
+kinux@gram-kidshim:/mnt/c/Users/kidshim$ kubectl exec -it pod/siege -- /bin/bash
+root@siege:/# while true; do curl http://ticketing:8080/serviceAddress; echo ""; sleep 1; done
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51   << health down
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-5bv9q/192.168.25.110
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+ticketing-6769d67cdd-qtdv5/192.168.80.51
+```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl exec -it pod/siege -- /bin/bash
+root@siege:/# http put http://ticketing:8080/actuator/down
+TTP/1.1 200HTTP/1.1 200
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 08:41:21 GMT
+Transfer-Encoding: chunked
+
+{
+    "status": "DOWN"
 }
-#####################################################
 ```
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get all
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/app-8f78b644d-kpbq4              1/1     Running   0          4h3m
+pod/customercenter-56d47c8c6-89fn7   1/1     Running   0          139m
+pod/gateway-6d664c5d6f-nmg58         1/1     Running   0          3h59m
+pod/kakao-794487c556-z5vzt           1/1     Running   0          3h58m
+pod/movie-ccbbc5bb9-42r9k            1/1     Running   0          4h3m
+pod/pay-56967ccf97-lllb4             1/1     Running   0          4h3m
+pod/siege                            1/1     Running   0          3h56m
+pod/theater-59b665f8d4-wpr75         1/1     Running   0          4h3m
+pod/ticketing-6769d67cdd-5bv9q       0/1     Running   0          12m
+pod/ticketing-6769d67cdd-qtdv5       1/1     Running   0          11m
 
-### 부하 기능 api 수행
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)          AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP         5h38m
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP         4h20m
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP   4h20m
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP         4h13m
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP         4h16m
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP         4h16m
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP         4h15m
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP         43m
 
-```shell
-# multitool Container 내부로 들어감.
-kubectl exec -it pod/multitool -- /bin/sh
-while true; do curl movie:8080/serviceAddress; echo echo ""; sleep 1; done
-http http://movie:8080/actuator/health
-http put http://movie:8080/actuator/down 
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           4h3m
+deployment.apps/customercenter   1/1     1            1           4h3m
+deployment.apps/gateway          1/1     1            1           3h59m
+deployment.apps/kakao            1/1     1            1           3h58m
+deployment.apps/movie            1/1     1            1           4h3m
+deployment.apps/pay              1/1     1            1           4h3m
+deployment.apps/theater          1/1     1            1           4h3m
+deployment.apps/ticketing        1/2     2            1           30m
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-8f78b644d               1         1         1       4h3m
+replicaset.apps/customercenter-56d47c8c6    1         1         1       168m
+replicaset.apps/customercenter-7b89f74f46   0         0         0       4h3m
+replicaset.apps/gateway-6d664c5d6f          1         1         1       3h59m
+replicaset.apps/kakao-794487c556            1         1         1       3h58m
+replicaset.apps/movie-ccbbc5bb9             1         1         1       4h3m
+replicaset.apps/pay-56967ccf97              1         1         1       4h3m
+replicaset.apps/theater-59b665f8d4          1         1         1       4h3m
+replicaset.apps/ticketing-56f99d87d         0         0         0       30m
+replicaset.apps/ticketing-6769d67cdd        2         2         1       12m
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          163m
 ```
+- 배포
+  - 버전을 변경하여 배포시 siege를 이용하여 서비스 가용성 여부를 확인한다.
+```sh
+NAME                                  READY   STATUS    RESTARTS   AGE
+pod/app-7f854969-chfdn                1/1     Running   0          8h
+pod/customercenter-6468986d85-8c4hw   1/1     Running   0          8h
+pod/gateway-6d664c5d6f-t4crg          1/1     Running   0          9h
+pod/kakao-67647f56b9-bpx7x            1/1     Running   0          9h
+pod/movie-ccbbc5bb9-52vtm             1/1     Running   0          9h
+pod/pay-56967ccf97-mslcp              1/1     Running   0          9h
+pod/siege-5b99b44c9c-pv7ll            1/1     Running   0          9h
+pod/theater-59b665f8d4-nxflt          1/1     Running   0          9h
+pod/ticketing-5894c96f9-c57w5         1/1     Running   0          8h
 
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)
+ AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP
+ 21h
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP
+ 19h
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP
+ 19h
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP
+ 19h
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP
+ 19h
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP
+ 19h
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP
+ 19h
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP
+ 16h
 
-### Readiness 테스트 수행결과
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           8h
+deployment.apps/customercenter   1/1     1            1           11h
+deployment.apps/gateway          1/1     1            1           19h
+deployment.apps/kakao            1/1     1            1           13h
+deployment.apps/movie            1/1     1            1           19h
+deployment.apps/pay              1/1     1            1           19h
+deployment.apps/siege            1/1     1            1           9h
+deployment.apps/theater          1/1     1            1           19h
+deployment.apps/ticketing        1/1     1            1           8h
 
-* 정상적으로 요청처리 가능한 POD의 응답 수신
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-7f854969                1         1         1       8h
+replicaset.apps/customercenter-6468986d85   1         1         1       11h
+replicaset.apps/gateway-6d664c5d6f          1         1         1       19h
+replicaset.apps/kakao-67647f56b9            1         1         1       13h
+replicaset.apps/movie-ccbbc5bb9             1         1         1       19h
+replicaset.apps/pay-56967ccf97              1         1         1       19h
+replicaset.apps/siege-5b99b44c9c            1         1         1       9h
+replicaset.apps/theater-59b665f8d4          1         1         1       19h
+replicaset.apps/ticketing-5894c96f9         1         1         1       8h
+replicaset.apps/ticketing-5bc97d5d7d        1         1         0       2s
 
-```shell
-movie-5f6c5757cb-5q2j8/10.1.1.211echo  <<<< 최초 2개의 POD에 대하여 번갈아가며 수행가능상태 응답
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo  <<<< 한개의 POD 중지요청 (Health down)
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-5q2j8/10.1.1.211echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo  <<<< 한개의 POD만 응답 (요청처리 가능상태)
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
-movie-5f6c5757cb-m7brh/10.1.1.212echo
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          18h
 ```
+- 버전 배포 중
+```sh
+Every 2.0s: kubectl get all                                                                                      gram-kidshim: Thu Jun 10 09:10:01 2021
 
+NAME                                  READY   STATUS        RESTARTS   AGE
+pod/app-7f854969-chfdn                1/1     Running       0          9h
+pod/customercenter-6468986d85-8c4hw   1/1     Running       0          8h
+pod/gateway-6d664c5d6f-t4crg          1/1     Running       0          9h
+pod/kakao-67647f56b9-bpx7x            1/1     Running       0          9h
+pod/movie-ccbbc5bb9-52vtm             1/1     Running       0          9h
+pod/pay-56967ccf97-mslcp              1/1     Running       0          9h
+pod/siege-5b99b44c9c-pv7ll            1/1     Running       0          9h
+pod/theater-59b665f8d4-nxflt          1/1     Running       0          9h
+pod/ticketing-5894c96f9-c57w5         0/1     Terminating   0          8h
+pod/ticketing-5bc97d5d7d-glzj4        1/1     Running       0          34s
 
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)
+ AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP
+ 21h
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP
+ 19h
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP
+ 19h
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP
+ 19h
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP
+ 19h
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP
+ 19h
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP
+ 19h
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP
+ 16h
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           9h
+deployment.apps/customercenter   1/1     1            1           11h
+deployment.apps/gateway          1/1     1            1           19h
+deployment.apps/kakao            1/1     1            1           13h
+deployment.apps/movie            1/1     1            1           19h
+deployment.apps/pay              1/1     1            1           19h
+deployment.apps/siege            1/1     1            1           9h
+deployment.apps/theater          1/1     1            1           19h
+deployment.apps/ticketing        1/1     1            1           8h
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-7f854969                1         1         1       9h
+replicaset.apps/customercenter-6468986d85   1         1         1       11h
+replicaset.apps/gateway-6d664c5d6f          1         1         1       19h
+replicaset.apps/kakao-67647f56b9            1         1         1       13h
+replicaset.apps/movie-ccbbc5bb9             1         1         1       19h
+replicaset.apps/pay-56967ccf97              1         1         1       19h
+replicaset.apps/siege-5b99b44c9c            1         1         1       9h
+replicaset.apps/theater-59b665f8d4          1         1         1       19h
+replicaset.apps/ticketing-5894c96f9         0         0         0       8h
+replicaset.apps/ticketing-5bc97d5d7d        1         1         1       37s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          18h
+```
+- 버전 배포 완료
+```sh
+Every 2.0s: kubectl get all                                                                                      gram-kidshim: Thu Jun 10 09:10:17 2021
+
+NAME                                  READY   STATUS    RESTARTS   AGE
+pod/app-7f854969-chfdn                1/1     Running   0          9h
+pod/customercenter-6468986d85-8c4hw   1/1     Running   0          8h
+pod/gateway-6d664c5d6f-t4crg          1/1     Running   0          9h
+pod/kakao-67647f56b9-bpx7x            1/1     Running   0          9h
+pod/movie-ccbbc5bb9-52vtm             1/1     Running   0          9h
+pod/pay-56967ccf97-mslcp              1/1     Running   0          9h
+pod/siege-5b99b44c9c-pv7ll            1/1     Running   0          9h
+pod/theater-59b665f8d4-nxflt          1/1     Running   0          9h
+pod/ticketing-5bc97d5d7d-glzj4        1/1     Running   0          51s
+
+NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP                                                                   PORT(S)
+ AGE
+service/app              ClusterIP      10.100.87.107    <none>                                                                        8080/TCP
+ 21h
+service/customercenter   ClusterIP      10.100.226.126   <none>                                                                        8080/TCP
+ 19h
+service/gateway          LoadBalancer   10.100.153.200   a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com   8080:32682/TCP
+ 19h
+service/kakao            ClusterIP      10.100.158.132   <none>                                                                        8080/TCP
+ 19h
+service/movie            ClusterIP      10.100.105.95    <none>                                                                        8080/TCP
+ 19h
+service/pay              ClusterIP      10.100.190.109   <none>                                                                        8080/TCP
+ 19h
+service/theater          ClusterIP      10.100.48.162    <none>                                                                        8080/TCP
+ 19h
+service/ticketing        ClusterIP      10.100.139.237   <none>                                                                        8080/TCP
+ 16h
+
+NAME                             READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/app              1/1     1            1           9h
+deployment.apps/customercenter   1/1     1            1           11h
+deployment.apps/gateway          1/1     1            1           19h
+deployment.apps/kakao            1/1     1            1           13h
+deployment.apps/movie            1/1     1            1           19h
+deployment.apps/pay              1/1     1            1           19h
+deployment.apps/siege            1/1     1            1           9h
+deployment.apps/theater          1/1     1            1           19h
+deployment.apps/ticketing        1/1     1            1           8h
+
+NAME                                        DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-7f854969                1         1         1       9h
+replicaset.apps/customercenter-6468986d85   1         1         1       11h
+replicaset.apps/gateway-6d664c5d6f          1         1         1       19h
+replicaset.apps/kakao-67647f56b9            1         1         1       13h
+replicaset.apps/movie-ccbbc5bb9             1         1         1       19h
+replicaset.apps/pay-56967ccf97              1         1         1       19h
+replicaset.apps/siege-5b99b44c9c            1         1         1       9h
+replicaset.apps/theater-59b665f8d4          1         1         1       19h
+replicaset.apps/ticketing-5894c96f9         0         0         0       8h
+replicaset.apps/ticketing-5bc97d5d7d        1         1         1       54s
+
+NAME                                                 REFERENCE                   TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/customercenter   Deployment/customercenter   1%/50%    1         10        1          18h
+```
+- 요청 유실 없이 정상 배포된 것을 확인 할 수 있다.
+``` sh
+HTTP/1.1 200     0.00 secs:     228 bytes ==> GET  /printTickets
+
+Lifting the server siege...
+Transactions:                  16648 hits
+Availability:                 100.00 %
+Elapsed time:                  59.21 secs
+Data transferred:               3.62 MB
+Response time:                  0.00 secs
+Transaction rate:             281.17 trans/sec
+Throughput:                     0.06 MB/sec
+Concurrency:                    0.98
+Successful transactions:       16648
+Failed transactions:               0
+Longest transaction:            0.49
+Shortest transaction:           0.00
+```
 ---
-## Self-Healing (Liveness Probe)
+### 장애격리(Circuit Breaker)
+- 시나리오
+  - Spring FeignClient + Hystrix 옵션을 사용
+  - 요청처리 쓰레드에서 처리시간이 610 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
+```yaml
+hystrix:
+  command:
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 610
+feign:
+  customercenter-api:
+    url: http://customercenter:8080
+  httpclient:
+    connection-timeout: 1
+  hystrix:
+    enabled: true
+  client:
+    config:
+      default:
+        loggerLevel: FULL
+```
+- ticketing(feign client)
+```java
+package theatermy.external;
 
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
-### deployment.yml 에 Liveness Probe 옵션 추가
+import theatermy.config.HttpConfiguration;
 
+@FeignClient(name = "customercenter-api", url = "${feign.customercenter-api.url}",
+configuration = HttpConfiguration.class,
+fallbackFactory = BookInfoServiceFallbackFactory.class)
+public interface BookInfoService {
+
+  @GetMapping("/bookInfo")
+  public String searchBook(@RequestParam("bookId") String bookId);
+
+  @GetMapping("/isolation")
+  String isolation();
+}
+```
+```java
+//fallback
+package theatermy.external;
+
+import org.springframework.stereotype.Component;
+
+import feign.hystrix.FallbackFactory;
+
+@Component
+public class BookInfoServiceFallbackFactory implements FallbackFactory<BookInfoService> {
+
+  @Override
+  public BookInfoService create(Throwable cause) {
+    System.out.println("========= FallbackFactory called: Confirm ticketing Service =========");
+    return new BookInfoService() {
+      @Override
+      public String searchBook(String bookId) {
+        return "Fallback - ticketing";
+      }
+
+      @Override
+      public String isolation() {
+          return "fallback - isolation";
+      }
+    };
+  }
+}
+```
+- customercenter(feign server)
+```java
+  @RequestMapping(value = "/isolation", method = RequestMethod.GET, produces = "application/json;charset=UTF-8")
+  public String isolation(HttpServletRequest request, HttpServletResponse response) throws Exception {
+    Random rng = new Random();
+    long loopCnt = 0;
+
+    while (loopCnt < 100) {
+      double r = rng.nextFloat();
+      double v = Math.sin(Math.cos(Math.sin(Math.cos(r))));
+      System.out.println(String.format("r: %f, v %f", r, v));
+      loopCnt++;
+    }
+
+    return "real";
+  }
+```
+- 부하테스트 실행
+```sh
+root@siege:/# siege -c50 -t20S -r10 -v --content-type "application/json" http://ticketing:8080/isolations
+HTTP/1.1 200     0.02 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.01 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.01 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.09 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.09 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.10 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.18 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.06 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.06 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.08 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.14 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.02 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.08 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.06 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.06 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.10 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.24 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.34 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.22 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.08 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.10 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.05 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.32 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.34 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 200     0.08 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.22 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.48 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.38 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.48 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 200     0.11 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.10 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.08 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.03 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.04 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.07 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.06 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.12 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.13 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.18 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.68 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 200     0.14 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.14 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.11 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.10 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.13 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.15 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 200     0.14 secs:      20 bytes ==> GET  /isolations
+HTTP/1.1 500     0.52 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.62 secs:     179 bytes ==> GET  /isolations
+HTTP/1.1 500     0.13 secs:     179 bytes ==> GET  /isolations
+
+Lifting the server siege...
+Transactions:                   4931 hits
+Availability:                  85.25 %
+Elapsed time:                  19.97 secs
+Data transferred:               0.21 MB
+Response time:                  0.20 secs
+Transaction rate:             246.92 trans/sec
+Throughput:                     0.01 MB/sec
+Concurrency:                   48.49
+Successful transactions:        4931
+Failed transactions:             853
+Longest transaction:            1.89
+Shortest transaction:           0.00
+```
+---
+### Config Map 
+- 사나리오
+  - 고객센터의 번호를 config map에 등록하여 사용한다.(고객 센터 전화번호는 가끔 바뀔 수 있다.)
+- Config Map 생성 및 확인
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl create configmap call-number-cm --from-literal=callNum=010-123-4567
+configmap/call-number-cm created
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/ticketing$ kubectl get cm
+NAME             DATA   AGE
+call-number-cm   1      9s
+```
+- deployment.yml
+```yml
+      containers:
+        - name: customercenter
+          image: 879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/user10-customercenter:v1
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: '/actuator/health'
+              port: 8080
+            initialDelaySeconds: 10
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: '/actuator/health'
+              port: 8080
+            initialDelaySeconds: 120
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 5
+          resources:
+            limits:
+              cpu: "500m"
+            requests:
+              cpu: "200m"
+          env:
+          - name: CALLNUM
+            valueFrom:
+              configMapKeyRef:
+                name: call-number-cm
+                key: callNum
+```
+- apllication.yml
+```yaml
+call:
+  number: ${CALLNUM}
+```
+- BookInfoController.java
+```java
+@Value("${call.number}")
+String callNumber;
+
+@GetMapping("/call-number")
+public String getCallNumber() {
+    return callNumber;
+}
+```
+- CM값 확인
+```sh
+root@siege:/# http http://customercenter:8080/call-number
+HTTP/1.1 200
+Content-Length: 12
+Content-Type: text/plain;charset=UTF-8
+Date: Wed, 09 Jun 2021 09:51:02 GMT
+
+010-123-4567
+```
+---
+###  Polyglot
+- 시나리오
+  - 고객센터 서비스는 외부저장소(mariadb)를 이용하여 서비스 한다.
+- 헥사고날 아키텍처 변화(폴리글랏 퍼시스턴스)
+![image](https://user-images.githubusercontent.com/80908892/121360217-2ee14480-c96f-11eb-9d25-2d99ca9bfa8d.png)
 
 ```yaml
-livenessProbe:
-    httpGet:
-        path: '/actuator/health'
-        port: 8080
-    initialDelaySeconds: 120
-    timeoutSeconds: 2
-    periodSeconds: 5
-    failureThreshold: 5
+spring:
+  profiles: docker
+  datasource:
+    name: mantis
+    initialization-mode: always      
+    password: XXXXXXX
+    tomcat:
+      max-active: 50
+      max-idle: 20
+      max-wait: 20000
+      min-idle: 15
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mariadb://confidy.cafe24.com:3306/mantis?characterEncoding=UTF-8&serverTimezone=UTC
+    username: neoshim
+  jpa:
+    open-in-view: false
+    generate-ddl: true
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+```
+```log
+2021-06-09 12:36:18.971  INFO 1 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate Core {5.3.12.Final}
+2021-06-09 12:36:18.974  INFO 1 --- [           main] org.hibernate.cfg.Environment            : HHH000206: hibernate.properties not found
+2021-06-09 12:36:19.784  INFO 1 --- [           main] o.hibernate.annotations.common.Version   : HCANN000001: Hibernate Commons Annotations {5.0.4.Final}
+2021-06-09 12:36:21.350  INFO 1 --- [           main] org.hibernate.dialect.Dialect            : HHH000400: Using dialect: org.hibernate.dialect.MariaDB53Dialect
+Hibernate: create table book_info_table (book_id varchar(255) not null, customer_id varchar(255), movie_id varchar(255), seat_id varchar(255), status varchar(255), primary key (book_id)) engine=InnoDB
+Hibernate: create table mypage_table (id bigint not null, book_id varchar(255), customer_id varchar(255), movie_id varchar(255), pay_id varchar(255), screen_id varchar(255), seat_id varchar(255), status varchar(255), primary key (id)) engine=InnoDB
+2021-06-09 12:36:25.231  INFO 1 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2021-06-09 12:36:30.662  WARN 1 --- [           main] o.s.c.n.a.ArchaiusAutoConfiguration      : No spring.application.name found, defaulting to 'application'
+2021-06-09 12:36:30.669  WARN 1 --- [           main] c.n.c.sources.URLConfigurationSource     : No URLs will be polled as dynamic configuration sources.
+2021-06-09 12:36:30.669  INFO 1 --- [           main] c.n.c.sources.URLConfigurationSource     : To enable URLs as dynamic configuration sources, define System property archaius.configurationSource.additionalUrls or make config.properties available on classpath.
 ```
 
-* Movie 시스템의 health를 down 시키면 READY가 0/1로 내려갔다가 RESTART가 1로 올라가며 다시 시스템이 살아나는 것을 확인함
+```shell
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ http POST http://a97b4a1d2512e4683b978ebc12ecd83b-646188197.ap-southeast-2.elb.amazonaws.com:8080/reservations/new bookId="C1002" customerId="D1002" movieId="MOVIE-00002" seatId="E-1"
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+Date: Wed, 09 Jun 2021 12:41:43 GMT
+transfer-encoding: chunked
 
-![image](https://user-images.githubusercontent.com/80908892/119315005-53bb9380-bcb0-11eb-868f-46da0ae46814.png)
-
----
-※ 체크포인트 : https://workflowy.com/s/assessment-check-po/T5YrzcMewfo4J6LW
-
-
----
-# 신규 서비스 추가(ticketing/customercenter)
-
-## 추가요건
----
-기능적 요구사항
-1. 발권은 반드시 예약 상태를 확인 후 진행한다.(Sync 호출)
-1. 고객센터에서는 고객의 모든 예약상태를 조회할 수 있어야 한다.(CQRS)
-
-비기능적 요구사항
-1. 신규 서비스의 추가로 인한 기존 서비스의 영향도를 최소화 해야한다.
-
-## 이벤트 스토밍
-![image](https://user-images.githubusercontent.com/80908892/120929379-c94d4800-c723-11eb-8b31-22a9984ed905.png)
-- customercenter 서비스 추가
-- ticketing 서비스 추가
-
-## 헥사고날 아키텍처 변화
----
-![image](https://user-images.githubusercontent.com/80908892/120913161-cf193e00-c6cf-11eb-9f38-4cd05fa5d8e0.png)
-
-## 구현
----
-- 운영중은 kafka의 이벤트 구독으로 기존 서비스의 변화는 없다.
-- 기존 서비스가 신규 서비스를 호출하지 않으므로  추가기능을 개발할 필요가 없다.
-
-
+{
+    "bookId": "C1002",
+    "bookedYn": "Y",
+    "customerId": "D1002",
+    "id": 6,
+    "movieId": "MOVIE-00002",
+    "payId": "e2bdec83-7a9c-4e78-808b-627ad786e6d4",
+    "seatId": "E-1"
+}
+```
+![image](https://user-images.githubusercontent.com/80908892/121360412-5df7b600-c96f-11eb-8c9a-0dcd052760c9.png)

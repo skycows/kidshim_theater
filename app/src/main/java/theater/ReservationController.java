@@ -69,6 +69,10 @@ public class ReservationController {
             log.info("======= Pay Success. " + reservedMessage);
 
             //Send Event
+            reserved.setBookId(book.getBookId());
+            reserved.setMovieId(book.getMovieId());
+            reserved.setCustomerId(book.getCustomerId());
+            reserved.setSeatId(book.getSeatId());
             reserved.publish();            
 
             return ResponseEntity.ok(reservation);

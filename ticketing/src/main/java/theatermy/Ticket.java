@@ -13,6 +13,7 @@ public class Ticket {
     @GeneratedValue(strategy=GenerationType.AUTO)
     private Long id;
     private String bookId;
+    private String movieId;
     private String screenId;
     private String seatId;
 
@@ -44,6 +45,16 @@ public class Ticket {
     public String getBookId() {
         return bookId;
     }
+
+    public String getMovieId() {
+      return movieId;
+    }
+
+
+    public void setMovieId(String movieId) {
+      this.movieId = movieId;
+    }
+
 
     public void setBookId(String bookId) {
         this.bookId = bookId;
