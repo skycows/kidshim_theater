@@ -131,6 +131,53 @@ statefulset.apps/my-kafka             3/3     5m33s
 statefulset.apps/my-kafka-zookeeper   3/3     5m33s
 ```
 
+### MySQL설치
+```sh
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/mysql$ kubectl apply -f mysql-pv.yaml
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/mysql$ kubectl apply -f mysql-deployment.yaml
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/mysql$ kubectl describe deployment mysql
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/mysql$ kubectl get pods -l app=mysql
+NAME                     READY   STATUS    RESTARTS   AGE
+mysql-8659bbd95f-ml4dz   1/1     Running   0          3m34s
+
+kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/mysql$ kubectl run -it --rm --image=mysql:5.6 --restart=Never mysql-client -- mysql -h mysql -pa12345
+
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
++--------------------+
+3 rows in set (0.00 sec)
+
+mysql> create user 'k8s'@'%' identified by 'a12345';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> create user 'k8s'@'localhost' identified by 'a12345';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> flush privileges;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> CREATE DATABASE theater;
+Query OK, 1 row affected (0.00 sec)
+
+mysql> grant all privileges on k8s.* to 'theater'@'%';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> grant all privileges on k8s.* to 'theater'@'localhost';
+Query OK, 0 rows affected (0.00 sec)
+```
+
+- 삭제 시
+```sh
+kubectl delete deployment,svc mysql
+kubectl delete pvc mysql-pv-claim
+kubectl delete pv mysql-pv-volume
+```
+
 ### docker login
 ```bash
 kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim/app$ docker login --username AWS -p $(aws ecr get-login-password --region ap-southeast-2)  879772956301.dkr.ecr.ap-southeast-2.amazonaws.com/
@@ -525,14 +572,43 @@ check your BookId
 ---
 ## 비기능 요구사항
 ---
+### DashBoard
+```sh
+# Install Kubernetes Dashboard
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.2.0/aio/deploy/recommended.yaml
+
+# Patch the dashboard to allow skipping login
+kubectl patch deployment kubernetes-dashboard -n kubernetes-dashboard --type 'json' -p '[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--enable-skip-login"}]'
+
+# Install Metrics Server
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.4.2/components.yaml
+
+# Patch the metrisc server to work with insecure TLS
+kubectl patch deployment metrics-server -n kube-system --type 'json' -p '[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+
+# Run the Kubectl proxy to allow accessing the dashboard
+kubectl proxy
+```
+- delete 
+```sh
+kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.4.2/components.yaml
+kubectl delete -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.2.0/aio/deploy/recommended.yaml
+```
+
 ### Autoscale (HPA)
 - 사나리오
   - 고객센터(customercenter)에서 제공되는 서비스의 기능에 성능부하 로직을 적용한다.- isolations
   - 서비스 부하에 따른 고객센터의 Autoscale을 확인한다.
 - metrics설치
-```shell
+```sh
 kubectl apply -f  https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.3.7/components.yaml
 ```
+- docker desktop
+```sh
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.4.2/components.yaml
+kubectl patch deployment metrics-server -n kube-system --type 'json' -p '[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+```
+
 - metrics설치 확인
 ```shell
 kinux@gram-kidshim:/mnt/d/dev_room/study/assessment/kidshim$ kubectl get all -n kube-system

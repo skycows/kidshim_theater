@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
         - name: ticketing
-          image: kidshim/ticketing:v4
+          image: kidshim/ticketing:v2
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           readinessProbe:

@@ -2,7 +2,7 @@
 #
 
 mvn clean && mvn package
-docker build -t kidshim/ticketing:v4 .
-docker push kidshim/ticketing:v4
-# kubectl delete deploy ticketing
-# kubectl apply -f ./kubernetes
+docker build -t kidshim/ticketing:v2 .
+#docker push kidshim/ticketing:v2
+kubectl delete deploy ticketing
+kubectl apply -f ./kubernetes

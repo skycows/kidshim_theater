@@ -50,7 +50,8 @@ public class PolicyHandler {
     bookInfoRepository.save(bookInfo);
   }
 
-  // @StreamListener(KafkaProcessor.INPUT)
-  // public void whatever(@Payload String eventString){
-  // }
+  @StreamListener(KafkaProcessor.INPUT)
+  public void whatever(@Payload String eventString){
+    System.out.println("여기서 메시지를 받아요.");
+  }
 }

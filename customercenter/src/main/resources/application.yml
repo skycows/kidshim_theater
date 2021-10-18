@@ -10,15 +10,15 @@ spring:
   datasource:
     name: theater
     initialization-mode: always      
-    password: password
+    username: kidshim
+    password: a12345!2#
     tomcat:
       max-active: 50
       max-idle: 20
       max-wait: 20000
       min-idle: 15
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://mariadb.abcd.com:3306/theater?characterEncoding=UTF-8&serverTimezone=UTC
-    username: neoshim
+    url: jdbc:mariadb://skycows.cafe24.com:3306/kidshim
   jpa:
     open-in-view: false
     generate-ddl: true
@@ -46,10 +46,10 @@ spring:
         event-out:
           destination: theater
           contentType: application/json
-# logging:
-#   level:
-#     org.hibernate.type: trace
-#     org.springframework.cloud: debug
+logging:
+  level:
+    org.hibernate.type: trace
+    org.springframework.cloud: debug
 server:
   port: 8086
 ---
@@ -59,15 +59,15 @@ spring:
   datasource:
     name: theater
     initialization-mode: always      
-    password: password
+    username: kidshim
+    password: a12345!2#
     tomcat:
       max-active: 50
       max-idle: 20
       max-wait: 20000
       min-idle: 15
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://mariadb.abcd.com:3306/theater?characterEncoding=UTF-8&serverTimezone=UTC
-    username: neoshim
+    url: jdbc:mariadb://175.126.37.48:3306/kidshim
   jpa:
     open-in-view: false
     generate-ddl: true

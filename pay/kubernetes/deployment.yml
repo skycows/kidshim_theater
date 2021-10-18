@@ -17,6 +17,7 @@ spec:
       containers:
         - name: pay
           image: kidshim/pay:v1
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           readinessProbe:

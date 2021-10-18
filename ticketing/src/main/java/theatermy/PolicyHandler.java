@@ -16,7 +16,7 @@ public class PolicyHandler {
 
   @StreamListener(KafkaProcessor.INPUT)
   public void wheneverSeatReserved_TicketCreate(@Payload SeatReserved seatReserved) {
-    System.out.println("\n\n##### TicketRepository TicketCreate1 : " + seatReserved.toJson() + "\n\n");
+    System.out.println("\n\n##### SeatReserved TicketCreate1 : " + seatReserved.toJson() + "\n\n");
 
     if (!seatReserved.validate())
       return;
@@ -28,12 +28,12 @@ public class PolicyHandler {
       ticketRepository.save(ticket);
     }
 
-    System.out.println("\n\n##### TicketRepository TicketCreate2 : " + seatReserved.toJson() + "\n\n");
+    System.out.println("\n\n##### SeatReserved TicketCreate2 : " + seatReserved.toJson() + "\n\n");
   }
 
   @StreamListener(KafkaProcessor.INPUT)
   public void wheneverReserved_TicketCreate(@Payload Reserved reserved) {
-    System.out.println("\n\n##### TicketRepository reserved1 : " + reserved.toJson() + "\n\n");
+    System.out.println("\n\n##### Reserved TicketCreate1 : " + reserved.toJson() + "\n\n");
     if (!reserved.validate())
       return;
 
@@ -42,7 +42,7 @@ public class PolicyHandler {
     ticket.setMovieId(reserved.getMovieId());
     ticket.setSeatId(reserved.getSeatId());
     ticketRepository.save(ticket);
-    System.out.println("\n\n##### TicketRepository reserved2 : " + reserved.toJson() + "\n\n");
+    System.out.println("\n\n##### Reserved TicketCreate2 : " + reserved.toJson() + "\n\n");
   }
 
   @StreamListener(KafkaProcessor.INPUT)

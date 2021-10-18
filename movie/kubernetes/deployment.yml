@@ -17,6 +17,7 @@ spec:
       containers:
         - name: movie
           image: kidshim/movie:v1
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
           readinessProbe:
